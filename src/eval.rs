@@ -43,6 +43,7 @@ pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
                     "quasiquote" => eval_quasiquote(list, env),
                     "macroexpand" => eval_macroexpand(list, env),
                     "letrec" => eval_letrec(list, env),
+                    "load" => eval_load(list, env),
                     _ => eval_call(list, env),
                 }
             } else {
@@ -280,6 +281,68 @@ fn eval_fn(list: &[Value], env: &mut Env) -> Result<Value, String> {
         body: Box::new(body),
         env: captured_env,
     }))
+}
+
+fn eval_load(list: &[Value], env: &mut Env) -> Result<Value, String> {
+    if list.len() != 2 {
+        return Err("load requires exactly 1 argument".to_string());
+    }
+
+    // Evaluate the filename argument
+    let filename_val = eval(&list[1], env)?;
+    let filename = match filename_val {
+        Value::Str(s) => s,
+        _ => return Err("load requires a string filename".to_string()),
+    };
+
+    // Read the file
+    let content = match std::fs::read_to_string(&filename) {
+        Ok(content) => content,
+        Err(e) => return Err(format!("Failed to read file '{}': {}", filename, e)),
+    };
+
+    // Parse and evaluate each top-level form
+    use crate::reader::read;
+    
+    let lines: Vec<&str> = content.lines().collect();
+    let mut current_expr = String::new();
+    let mut paren_count = 0;
+    let mut last_result = Value::Nil;
+
+    for line in lines {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with(';') {
+            continue;
+        }
+
+        current_expr.push_str(line);
+        current_expr.push(' ');
+
+        // Count parentheses to detect complete expressions
+        for ch in trimmed.chars() {
+            match ch {
+                '(' => paren_count += 1,
+                ')' => paren_count -= 1,
+                _ => {}
+            }
+        }
+
+        // If we have a complete expression, evaluate it
+        if paren_count == 0 && !current_expr.trim().is_empty() {
+            match read(&current_expr) {
+                Ok(expr) => {
+                    match eval(&expr, env) {
+                        Ok(result) => last_result = result,
+                        Err(e) => return Err(format!("Error evaluating expression in '{}': {}", filename, e)),
+                    }
+                }
+                Err(e) => return Err(format!("Parse error in '{}': {}", filename, e)),
+            }
+            current_expr.clear();
+        }
+    }
+
+    Ok(last_result)
 }
 
 fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
@@ -570,6 +633,43 @@ pub fn create_default_env() -> Env {
             match &args[0] {
                 Value::Bool(false) | Value::Nil => Ok(Value::Bool(true)),
                 _ => Ok(Value::Bool(false)),
+            }
+        })),
+    );
+
+    // File I/O functions
+    env.set(
+        "read-file".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("read-file requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Str(filename) => {
+                    match std::fs::read_to_string(filename) {
+                        Ok(content) => Ok(Value::Str(content)),
+                        Err(e) => Err(format!("Failed to read file '{}': {}", filename, e)),
+                    }
+                }
+                _ => Err("read-file requires a string filename".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "write-file".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 2 {
+                return Err("write-file requires exactly 2 arguments".to_string());
+            }
+            match (&args[0], &args[1]) {
+                (Value::Str(filename), Value::Str(content)) => {
+                    match std::fs::write(filename, content) {
+                        Ok(_) => Ok(Value::Nil),
+                        Err(e) => Err(format!("Failed to write file '{}': {}", filename, e)),
+                    }
+                }
+                _ => Err("write-file requires string filename and content".to_string()),
             }
         })),
     );
