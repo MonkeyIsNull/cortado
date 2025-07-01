@@ -5,8 +5,6 @@
 
 A Lisp-like programming language implemented in Rust. Cortado features S-expression syntax, functional programming constructs, a powerful macro system, and lexical scoping.
 
-A Lisp-like programming language implemented in Rust. Cortado features S-expression syntax, functional programming constructs, a powerful macro system, and lexical scoping.
-
 ## Features
 
 - **S-expression syntax** - Code as data philosophy
