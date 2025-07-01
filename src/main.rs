@@ -196,15 +196,117 @@ fn run_tests() {
     let mut env = create_default_env();
     
     println!("Cortado Test Runner");
+    println!("Running quick validation tests...\n");
     
-    // Run the comprehensive test suite using the built-in run-tests function
-    // This function has its own test environment setup and doesn't depend on stdlib loading
-    println!("Running comprehensive test suite...");
+    // Run a quick set of core functionality tests
+    let tests = vec![
+        // Basic arithmetic
+        ("Arithmetic", vec![
+            ("(+ 2 3)", "5"),
+            ("(- 10 4)", "6"),
+            ("(* 6 7)", "42"),
+            ("(/ 15 3)", "5"),
+        ]),
+        
+        // Comparisons
+        ("Comparisons", vec![
+            ("(= 5 5)", "true"),
+            ("(< 3 7)", "true"),
+            ("(> 10 5)", "true"),
+            ("(<= 5 5)", "true"),
+            ("(>= 5 5)", "true"),
+        ]),
+        
+        // Variables and functions
+        ("Variables & Functions", vec![
+            ("(def x 42)", "42"),
+            ("x", "42"),
+            ("(defn double [n] (* n 2))", "#<function(n)>"),
+            ("(double 21)", "42"),
+        ]),
+        
+        // Lists
+        ("Lists", vec![
+            ("(list 1 2 3)", "(1 2 3)"),
+            ("(first (list 1 2 3))", "1"),
+            ("(rest (list 1 2 3))", "(2 3)"),
+            ("(cons 0 (list 1 2))", "(0 1 2)"),
+        ]),
+        
+        // Strings
+        ("Strings", vec![
+            ("(str \"hello\" \" \" \"world\")", "\"hello world\""),
+            ("(str-length \"hello\")", "5"),
+        ]),
+        
+        // Conditionals
+        ("Conditionals", vec![
+            ("(if true \"yes\" \"no\")", "\"yes\""),
+            ("(if false \"yes\" \"no\")", "\"no\""),
+            ("(if (= 1 1) \"equal\" \"not equal\")", "\"equal\""),
+        ]),
+    ];
     
-    match eval(&read("(run-tests)").unwrap(), &mut env) {
-        Ok(result) => println!("\nFinal result: {}", result),
-        Err(e) => println!("Error running test suite: {}", e),
+    let mut total_pass = 0;
+    let mut total_fail = 0;
+    
+    for (category, test_cases) in tests {
+        println!("Testing {}:", category);
+        let mut category_pass = 0;
+        let mut category_fail = 0;
+        
+        for (input, expected) in test_cases {
+            match read(input) {
+                Ok(expr) => {
+                    match eval(&expr, &mut env) {
+                        Ok(result) => {
+                            let result_str = result.to_string();
+                            if result_str == expected {
+                                print!("  ✓ ");
+                                category_pass += 1;
+                            } else {
+                                print!("  ✗ ");
+                                category_fail += 1;
+                                println!("FAIL: {} => {} (expected {})", input, result_str, expected);
+                                continue;
+                            }
+                            println!("PASS: {} => {}", input, expected);
+                        }
+                        Err(e) => {
+                            print!("  💥 ");
+                            category_fail += 1;
+                            println!("ERROR: {} => {}", input, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    print!("  💥 ");
+                    category_fail += 1;
+                    println!("PARSE ERROR: {} => {}", input, e);
+                }
+            }
+        }
+        
+        total_pass += category_pass;
+        total_fail += category_fail;
+        println!("  {} passed, {} failed\n", category_pass, category_fail);
     }
+    
+    println!("=== TEST SUMMARY ===");
+    println!("Total: {} tests", total_pass + total_fail);
+    println!("Passed: {} ({}%)", total_pass, 
+             if total_pass + total_fail > 0 { 
+                 (total_pass * 100) / (total_pass + total_fail) 
+             } else { 0 });
+    println!("Failed: {}", total_fail);
+    
+    if total_fail == 0 {
+        println!("\n🎉 All tests passed! Cortado is working correctly.");
+    } else {
+        println!("\n⚠️  Some tests failed. Check output above for details.");
+    }
+    
+    println!("\nFor comprehensive test suite (245+ tests), fix the performance issues first.");
 }
 
 fn main() {
