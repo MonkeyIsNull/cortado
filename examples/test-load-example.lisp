@@ -1,5 +1,5 @@
-(load "std/core.ctl")
+(load "std/core.lisp")
 (print "Core loaded")
-(load "std/math.ctl")
+(load "std/math.lisp")
 (print "Math loaded")
 (inc 5)

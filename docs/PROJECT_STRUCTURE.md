@@ -10,27 +10,27 @@ cortado/
 │   └── env.rs             # Environment (variable scoping)
 │
 ├── std/                    # Standard library (written in Cortado)
-│   ├── core.ctl           # Core macros and functions
-│   ├── math.ctl           # Mathematical functions
-│   ├── seq.ctl            # Sequence operations
-│   ├── str.ctl            # String operations
-│   ├── map.ctl            # Map/dictionary operations
-│   ├── util.ctl           # Utility functions
-│   └── time.ctl           # Time-related functions
+│   ├── core.lisp          # Core macros and functions
+│   ├── math.lisp          # Mathematical functions
+│   ├── seq.lisp           # Sequence operations
+│   ├── str.lisp           # String operations
+│   ├── map.lisp           # Map/dictionary operations
+│   ├── util.lisp          # Utility functions
+│   └── time.lisp          # Time-related functions
 │
 ├── test/                   # Comprehensive test suite
-│   ├── regression.ctl     # Critical functionality tests
-│   ├── core-comprehensive.ctl
-│   ├── math-comprehensive.ctl
-│   ├── seq-comprehensive.ctl
-│   ├── macro-comprehensive.ctl
-│   ├── io-comprehensive.ctl
-│   ├── edge-cases.ctl
+│   ├── regression.lisp    # Critical functionality tests
+│   ├── core-comprehensive.lisp
+│   ├── math-comprehensive.lisp
+│   ├── seq-comprehensive.lisp
+│   ├── macro-comprehensive.lisp
+│   ├── io-comprehensive.lisp
+│   ├── edge-cases.lisp
 │   └── ... (10+ test files, 245+ tests)
 │
 ├── examples/               # Example Cortado programs
-│   ├── simple-example.ctl
-│   └── code.ctl
+│   ├── simple-example.lisp
+│   └── code.lisp
 │
 ├── docs/                   # Documentation
 │   ├── COMPREHENSIVE_TEST_SUMMARY.md

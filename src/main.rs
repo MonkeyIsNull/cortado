@@ -22,13 +22,13 @@ fn load_stdlib(env: &mut Env) -> Result<(), String> {
     
     // Define loading order - core should be loaded first
     let modules = vec![
-        "core.ctl",
-        "math.ctl", 
-        "seq.ctl",
-        "str.ctl",
-        "map.ctl",
-        "util.ctl",
-        "time.ctl",
+        "core.lisp",
+        "math.lisp", 
+        "seq.lisp",
+        "str.lisp",
+        "map.lisp",
+        "util.lisp",
+        "time.lisp",
     ];
     
     for module in modules {

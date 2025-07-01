@@ -789,7 +789,6 @@ pub fn create_default_env() -> Env {
     );
 
     // Test result counters - global state for tracking
-    use std::sync::{Arc, Mutex};
     use std::sync::atomic::{AtomicUsize, Ordering};
     
     static PASS_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -845,10 +844,10 @@ pub fn create_default_env() -> Env {
                 for entry in entries {
                     if let Ok(entry) = entry {
                         let path = entry.path();
-                        if path.extension().map_or(false, |ext| ext == "ctl") {
+                        if path.extension().map_or(false, |ext| ext == "lisp") {
                             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                                 // Skip files that are known to cause issues
-                                if name == "test-load.ctl" || name.contains("stdlib") {
+                                if name == "test-load.lisp" || name.contains("stdlib") {
                                     println!("\n⏭️  Skipping: {} (known to cause hangs)", name);
                                     continue;
                                 }
