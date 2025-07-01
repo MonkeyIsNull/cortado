@@ -6,6 +6,68 @@ mod eval;
 use reader::read;
 use eval::{eval, create_default_env};
 
+fn test_letrec() {
+    let mut env = create_default_env();
+    
+    println!("Testing letrec...");
+    
+    // Test simple binding first
+    let simple_test = "(letrec [[x 42]] x)";
+    println!(">>> {}", simple_test);
+    match read(simple_test) {
+        Ok(expr) => {
+            match eval(&expr, &mut env) {
+                Ok(result) => println!("{}", result),
+                Err(e) => println!("Eval error: {}", e),
+            }
+        }
+        Err(e) => println!("Parse error: {}", e),
+    }
+    println!();
+    
+    // Test function binding
+    let fn_test = "(letrec [[f (fn [x] x)]] f)";
+    println!(">>> {}", fn_test);
+    match read(fn_test) {
+        Ok(expr) => {
+            match eval(&expr, &mut env) {
+                Ok(result) => println!("{}", result),
+                Err(e) => println!("Eval error: {}", e),
+            }
+        }
+        Err(e) => println!("Parse error: {}", e),
+    }
+    println!();
+    
+    // Test calling a function from letrec
+    let call_test = "(letrec [[f (fn [x] (+ x 1))]] (f 5))";
+    println!(">>> {}", call_test);
+    match read(call_test) {
+        Ok(expr) => {
+            match eval(&expr, &mut env) {
+                Ok(result) => println!("{}", result),
+                Err(e) => println!("Eval error: {}", e),
+            }
+        }
+        Err(e) => println!("Parse error: {}", e),
+    }
+    println!();
+    
+    // Test simple factorial
+    let factorial_test = "(letrec [[factorial (fn [n] (if (= n 0) 1 (* n (factorial (- n 1)))))]] (factorial 5))";
+    println!(">>> {}", factorial_test);
+    match read(factorial_test) {
+        Ok(expr) => {
+            match eval(&expr, &mut env) {
+                Ok(result) => println!("{}", result),
+                Err(e) => println!("Eval error: {}", e),
+            }
+        }
+        Err(e) => println!("Parse error: {}", e),
+    }
+    println!();
+}
+
 fn main() {
     let mut env = create_default_env();
     
@@ -87,6 +149,30 @@ fn main() {
     ];
     
     for example in macro_examples {
+        println!(">>> {}", example);
+        match read(example) {
+            Ok(expr) => {
+                match eval(&expr, &mut env) {
+                    Ok(result) => println!("{}", result),
+                    Err(e) => println!("Eval error: {}", e),
+                }
+            }
+            Err(e) => println!("Parse error: {}", e),
+        }
+        println!();
+    }
+    
+    println!("\nLetrec examples (local recursive bindings):");
+    
+    let letrec_examples = vec![
+        "(letrec [[x 42]] x)",  // Simple binding
+        "(letrec [[f (fn [x] (+ x 1))]] (f 5))",  // Non-recursive function
+        "(letrec [[double (fn [x] (* x 2))] [triple (fn [x] (* x 3))]] (+ (double 5) (triple 4)))",  // Multiple bindings
+        // Note: Recursive functions need special handling due to environment capture
+        "(letrec [[factorial (fn [n] (if (= n 0) 1 (* n 1)))]] (factorial 5))",  // Non-recursive version
+    ];
+    
+    for example in letrec_examples {
         println!(">>> {}", example);
         match read(example) {
             Ok(expr) => {

@@ -7,6 +7,9 @@ pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
         Value::Number(_) | Value::Bool(_) | Value::Nil | Value::Str(_) | Value::Keyword(_) => {
             Ok(expr.clone())
         }
+        Value::Uninitialized => {
+            Err("Cannot evaluate uninitialized value".to_string())
+        }
         Value::Symbol(name) => env
             .get(name)
             .ok_or_else(|| format!("Undefined symbol: {}", name)),
@@ -39,6 +42,7 @@ pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
                     "quote" => eval_quote(list),
                     "quasiquote" => eval_quasiquote(list, env),
                     "macroexpand" => eval_macroexpand(list, env),
+                    "letrec" => eval_letrec(list, env),
                     _ => eval_call(list, env),
                 }
             } else {
@@ -204,6 +208,50 @@ fn eval_macroexpand(list: &[Value], env: &Env) -> Result<Value, String> {
     macroexpand(form, env)
 }
 
+fn eval_letrec(list: &[Value], env: &mut Env) -> Result<Value, String> {
+    if list.len() != 3 {
+        return Err("letrec requires exactly 2 arguments".to_string());
+    }
+
+    let bindings = match &list[1] {
+        Value::Vector(bindings) => bindings,
+        _ => return Err("letrec bindings must be a vector".to_string()),
+    };
+
+    // Create new environment
+    let mut local_env = Env::with_parent(env.clone());
+
+    // Step 1: Pre-bind all names to Uninitialized
+    let mut binding_names = Vec::new();
+    for binding in bindings {
+        if let Value::Vector(pair) = binding {
+            if pair.len() != 2 {
+                return Err("Each binding must be a vector of [name value]".to_string());
+            }
+            if let Value::Symbol(name) = &pair[0] {
+                binding_names.push(name.clone());
+                local_env.set(name.clone(), Value::Uninitialized);
+            } else {
+                return Err("Binding name must be a symbol".to_string());
+            }
+        } else {
+            return Err("Each binding must be a vector".to_string());
+        }
+    }
+
+    // Step 2: Evaluate each RHS and immediately update
+    for (i, binding) in bindings.iter().enumerate() {
+        if let Value::Vector(pair) = binding {
+            let name = &binding_names[i];
+            let value = eval(&pair[1], &mut local_env)?;
+            local_env.update(name, value)?;
+        }
+    }
+
+    // Step 3: Evaluate the body
+    eval(&list[2], &mut local_env)
+}
+
 fn eval_fn(list: &[Value], env: &mut Env) -> Result<Value, String> {
     if list.len() != 3 {
         return Err("fn requires exactly 2 arguments".to_string());
@@ -250,7 +298,11 @@ fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
     // Not a macro, evaluate normally
     let mut evaluated = Vec::new();
     for item in list {
-        evaluated.push(eval(item, env)?);
+        let val = eval(item, env)?;
+        // if let Value::Uninitialized = val {
+        //     return Err(format!("Cannot call uninitialized function: {:?}", item));
+        // }
+        evaluated.push(val);
     }
 
     if let Value::Function(func) = &evaluated[0] {

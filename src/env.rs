@@ -35,4 +35,15 @@ impl Env {
             None
         }
     }
+
+    pub fn update(&mut self, name: &str, val: Value) -> Result<(), String> {
+        if self.data.contains_key(name) {
+            self.data.insert(name.to_string(), val);
+            Ok(())
+        } else if let Some(parent) = &mut self.parent {
+            parent.update(name, val)
+        } else {
+            Err(format!("Variable {} not found for update", name))
+        }
+    }
 }

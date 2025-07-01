@@ -29,6 +29,7 @@ pub enum Value {
     Map(HashMap<String, Value>),
     Keyword(String),
     Function(Function),
+    Uninitialized,
 }
 
 impl Eq for Value {}
@@ -78,6 +79,9 @@ impl std::hash::Hash for Value {
             }
             Value::Function(_) => {
                 9u8.hash(state);
+            }
+            Value::Uninitialized => {
+                10u8.hash(state);
             }
         }
     }
@@ -139,6 +143,7 @@ impl fmt::Display for Value {
                     write!(f, "#<macro({})>", params.join(" "))
                 }
             },
+            Value::Uninitialized => write!(f, "#<uninitialized>"),
         }
     }
 }
