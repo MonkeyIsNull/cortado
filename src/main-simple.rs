@@ -9,7 +9,7 @@ use eval::{eval, create_default_env};
 fn main() {
     let mut env = create_default_env();
     
-    println!("Cortado Language Demo");
+    println!("Cortado Quick Test");
     
     let examples = vec![
         "(+ 1 2)",
@@ -21,7 +21,6 @@ fn main() {
         "'(a b c)",
         "(defmacro unless [cond body] `(if ~cond nil ~body))",
         "(unless false 42)",
-        "(letrec [[x 10]] x)",
     ];
 
     for example in examples {
@@ -37,5 +36,5 @@ fn main() {
         }
     }
     
-    println!("Demo completed successfully!");
+    println!("Done!");
 }

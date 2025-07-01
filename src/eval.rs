@@ -473,6 +473,107 @@ pub fn create_default_env() -> Env {
         })),
     );
 
+    // Comparison functions
+    env.set(
+        "<".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 2 {
+                return Err("< requires exactly 2 arguments".to_string());
+            }
+            if let (Value::Number(a), Value::Number(b)) = (&args[0], &args[1]) {
+                Ok(Value::Bool(a < b))
+            } else {
+                Err("< requires numbers".to_string())
+            }
+        })),
+    );
+
+    env.set(
+        ">".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 2 {
+                return Err("> requires exactly 2 arguments".to_string());
+            }
+            if let (Value::Number(a), Value::Number(b)) = (&args[0], &args[1]) {
+                Ok(Value::Bool(a > b))
+            } else {
+                Err("> requires numbers".to_string())
+            }
+        })),
+    );
+
+    // List operations
+    env.set(
+        "cons".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 2 {
+                return Err("cons requires exactly 2 arguments".to_string());
+            }
+            if let Value::List(list) = &args[1] {
+                let mut new_list = vec![args[0].clone()];
+                new_list.extend(list.iter().cloned());
+                Ok(Value::List(new_list))
+            } else if args[1] == Value::Nil {
+                Ok(Value::List(vec![args[0].clone()]))
+            } else {
+                Err("cons requires a list as second argument".to_string())
+            }
+        })),
+    );
+
+    env.set(
+        "first".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("first requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::List(list) => {
+                    if list.is_empty() {
+                        Ok(Value::Nil)
+                    } else {
+                        Ok(list[0].clone())
+                    }
+                }
+                Value::Nil => Ok(Value::Nil),
+                _ => Err("first requires a list".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "rest".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("rest requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::List(list) => {
+                    if list.is_empty() {
+                        Ok(Value::Nil)
+                    } else {
+                        Ok(Value::List(list[1..].to_vec()))
+                    }
+                }
+                Value::Nil => Ok(Value::Nil),
+                _ => Err("rest requires a list".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "not".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("not requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Bool(false) | Value::Nil => Ok(Value::Bool(true)),
+                _ => Ok(Value::Bool(false)),
+            }
+        })),
+    );
+
     env
 }
 
