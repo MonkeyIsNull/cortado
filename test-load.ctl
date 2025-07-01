@@ -1,0 +1,5 @@
+(load "std/core.ctl")
+(print "Core loaded")
+(load "std/math.ctl")
+(print "Math loaded")
+(inc 5)
