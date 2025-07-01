@@ -33,8 +33,12 @@ pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
                 match name.as_str() {
                     "def" => eval_def(list, env),
                     "defn" => eval_defn(list, env),
+                    "defmacro" => eval_defmacro(list, env),
                     "if" => eval_if(list, env),
                     "fn" => eval_fn(list, env),
+                    "quote" => eval_quote(list),
+                    "quasiquote" => eval_quasiquote(list, env),
+                    "macroexpand" => eval_macroexpand(list, env),
                     _ => eval_call(list, env),
                 }
             } else {
@@ -96,6 +100,110 @@ fn eval_defn(list: &[Value], env: &mut Env) -> Result<Value, String> {
     }
 }
 
+fn eval_quote(list: &[Value]) -> Result<Value, String> {
+    if list.len() != 2 {
+        return Err("quote requires exactly 1 argument".to_string());
+    }
+    Ok(list[1].clone())
+}
+
+fn eval_quasiquote(list: &[Value], env: &mut Env) -> Result<Value, String> {
+    if list.len() != 2 {
+        return Err("quasiquote requires exactly 1 argument".to_string());
+    }
+    eval_quasiquote_form(&list[1], env)
+}
+
+fn eval_quasiquote_form(form: &Value, env: &mut Env) -> Result<Value, String> {
+    match form {
+        Value::List(items) => {
+            if !items.is_empty() {
+                if let Value::Symbol(sym) = &items[0] {
+                    if sym == "unquote" {
+                        if items.len() != 2 {
+                            return Err("unquote requires exactly 1 argument".to_string());
+                        }
+                        return eval(&items[1], env);
+                    }
+                }
+            }
+            
+            let mut result = Vec::new();
+            for item in items {
+                result.push(eval_quasiquote_form(item, env)?);
+            }
+            Ok(Value::List(result))
+        }
+        Value::Vector(items) => {
+            let mut result = Vec::new();
+            for item in items {
+                result.push(eval_quasiquote_form(item, env)?);
+            }
+            Ok(Value::Vector(result))
+        }
+        _ => Ok(form.clone()),
+    }
+}
+
+fn eval_defmacro(list: &[Value], env: &mut Env) -> Result<Value, String> {
+    if list.len() != 4 {
+        return Err("defmacro requires exactly 3 arguments".to_string());
+    }
+
+    if let Value::Symbol(name) = &list[1] {
+        let params = match &list[2] {
+            Value::Vector(params) => {
+                let mut param_names = Vec::new();
+                for param in params {
+                    if let Value::Symbol(pname) = param {
+                        param_names.push(pname.clone());
+                    } else {
+                        return Err("Macro parameters must be symbols".to_string());
+                    }
+                }
+                param_names
+            }
+            _ => return Err("Macro parameters must be a vector".to_string()),
+        };
+
+        let body = list[3].clone();
+        let captured_env = env.clone();
+
+        let macro_fn = Value::Function(Function::Macro {
+            params,
+            body: Box::new(body),
+            env: captured_env,
+        });
+        
+        env.set(name.clone(), macro_fn.clone());
+        Ok(macro_fn)
+    } else {
+        Err("First argument to defmacro must be a symbol".to_string())
+    }
+}
+
+fn eval_macroexpand(list: &[Value], env: &Env) -> Result<Value, String> {
+    if list.len() != 2 {
+        return Err("macroexpand requires exactly 1 argument".to_string());
+    }
+    // Evaluate the argument to get the actual form
+    let form = match &list[1] {
+        Value::List(inner) if !inner.is_empty() => {
+            if let Value::Symbol(sym) = &inner[0] {
+                if sym == "quote" && inner.len() == 2 {
+                    &inner[1]
+                } else {
+                    &list[1]
+                }
+            } else {
+                &list[1]
+            }
+        }
+        _ => &list[1]
+    };
+    macroexpand(form, env)
+}
+
 fn eval_fn(list: &[Value], env: &mut Env) -> Result<Value, String> {
     if list.len() != 3 {
         return Err("fn requires exactly 2 arguments".to_string());
@@ -127,6 +235,19 @@ fn eval_fn(list: &[Value], env: &mut Env) -> Result<Value, String> {
 }
 
 fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
+    // First check if it's a macro call
+    if let Value::Symbol(name) = &list[0] {
+        if let Some(value) = env.get(name) {
+            if let Value::Function(Function::Macro { params, body, env: macro_env }) = value {
+                // It's a macro - expand it first
+                let expanded = expand_macro(&params, &body, &list[1..], &macro_env)?;
+                // Then evaluate the expanded form
+                return eval(&expanded, env);
+            }
+        }
+    }
+    
+    // Not a macro, evaluate normally
     let mut evaluated = Vec::new();
     for item in list {
         evaluated.push(eval(item, env)?);
@@ -151,10 +272,30 @@ fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
 
                 eval(body, &mut local_env)
             }
+            Function::Macro { .. } => {
+                Err("Macros should be expanded before evaluation".to_string())
+            }
         }
     } else {
         Err(format!("Cannot call non-function: {:?}", evaluated[0]))
     }
+}
+
+fn expand_macro(params: &[String], body: &Value, args: &[Value], macro_env: &Env) -> Result<Value, String> {
+    if args.len() != params.len() {
+        return Err(format!(
+            "Macro expects {} arguments, got {}",
+            params.len(),
+            args.len()
+        ));
+    }
+    
+    let mut expansion_env = Env::with_parent(macro_env.clone());
+    for (param, arg) in params.iter().zip(args) {
+        expansion_env.set(param.clone(), arg.clone());
+    }
+    
+    eval(body, &mut expansion_env)
 }
 
 pub fn create_default_env() -> Env {
@@ -281,4 +422,20 @@ pub fn create_default_env() -> Env {
     );
 
     env
+}
+
+pub fn macroexpand(expr: &Value, env: &Env) -> Result<Value, String> {
+    if let Value::List(list) = expr {
+        if !list.is_empty() {
+            if let Value::Symbol(name) = &list[0] {
+                if let Some(value) = env.get(name) {
+                    if let Value::Function(Function::Macro { params, body, env: macro_env }) = value {
+                        return expand_macro(&params, &body, &list[1..], &macro_env);
+                    }
+                }
+            }
+        }
+    }
+    // Not a macro call, return as-is
+    Ok(expr.clone())
 }

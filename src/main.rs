@@ -68,4 +68,35 @@ fn main() {
         }
         println!();
     }
+    
+    println!("\nMacro examples:");
+    
+    let macro_examples = vec![
+        "'(+ 1 2)",  // Quote example
+        "(quote (a b c))",  // Quote example
+        "`(list 1 2 ~(+ 1 2))",  // Quasiquote with unquote
+        "(defmacro unless [cond body] `(if ~cond nil ~body))",
+        "(macroexpand '(unless false (print \"hi\")))",
+        "(unless false (print \"This should print\"))",
+        "(unless true (print \"This should not print\"))",
+        "(defmacro when [cond body] `(if ~cond ~body nil))",
+        "(when true (print \"This prints with when\"))",
+        "(defmacro infix [a op b] `(~op ~a ~b))",
+        "(macroexpand '(infix 2 + 3))",
+        "(infix 2 + 3)",
+    ];
+    
+    for example in macro_examples {
+        println!(">>> {}", example);
+        match read(example) {
+            Ok(expr) => {
+                match eval(&expr, &mut env) {
+                    Ok(result) => println!("{}", result),
+                    Err(e) => println!("Eval error: {}", e),
+                }
+            }
+            Err(e) => println!("Parse error: {}", e),
+        }
+        println!();
+    }
 }

@@ -15,6 +15,9 @@ enum Token {
     Keyword(String),
     Bool(bool),
     Nil,
+    Quote,
+    Quasiquote,
+    Unquote,
 }
 
 fn tokenize(input: &str) -> Result<Vec<Token>, String> {
@@ -90,6 +93,18 @@ fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                     return Err("Invalid keyword".to_string());
                 }
                 tokens.push(Token::Keyword(keyword));
+            }
+            '\'' => {
+                tokens.push(Token::Quote);
+                i += 1;
+            }
+            '`' => {
+                tokens.push(Token::Quasiquote);
+                i += 1;
+            }
+            '~' => {
+                tokens.push(Token::Unquote);
+                i += 1;
             }
             ';' => {
                 while i < chars.len() && chars[i] != '\n' {
@@ -183,6 +198,21 @@ impl Parser {
             Token::Nil => {
                 self.pos += 1;
                 Ok(Value::Nil)
+            }
+            Token::Quote => {
+                self.pos += 1;
+                let quoted = self.parse()?;
+                Ok(Value::List(vec![Value::Symbol("quote".to_string()), quoted]))
+            }
+            Token::Quasiquote => {
+                self.pos += 1;
+                let quoted = self.parse()?;
+                Ok(Value::List(vec![Value::Symbol("quasiquote".to_string()), quoted]))
+            }
+            Token::Unquote => {
+                self.pos += 1;
+                let unquoted = self.parse()?;
+                Ok(Value::List(vec![Value::Symbol("unquote".to_string()), unquoted]))
             }
             _ => Err(format!("Unexpected token: {:?}", self.tokens[self.pos])),
         }

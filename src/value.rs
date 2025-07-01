@@ -10,6 +10,11 @@ pub enum Function {
         body: Box<Value>,
         env: Env,
     },
+    Macro {
+        params: Vec<String>,
+        body: Box<Value>,
+        env: Env,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -129,6 +134,9 @@ impl fmt::Display for Value {
                 Function::Native(_) => write!(f, "#<native-function>"),
                 Function::UserDefined { params, .. } => {
                     write!(f, "#<function({})>", params.join(" "))
+                }
+                Function::Macro { params, .. } => {
+                    write!(f, "#<macro({})>", params.join(" "))
                 }
             },
         }
