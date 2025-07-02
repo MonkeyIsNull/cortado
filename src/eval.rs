@@ -864,13 +864,37 @@ pub fn create_default_env() -> Env {
             
             if args[0] == args[1] {
                 PASS_COUNT.fetch_add(1, Ordering::SeqCst);
-                println!("  ✓ PASS: {} == {}", args[0], args[1]);
+                println!("  PASS: {} == {}", args[0], args[1]);
                 Ok(Value::Bool(true))
             } else {
                 FAIL_COUNT.fetch_add(1, Ordering::SeqCst);
-                println!("  ✗ FAIL: expected {} but got {}", args[0], args[1]);
+                println!("  FAIL: expected {} but got {}", args[0], args[1]);
                 Ok(Value::Bool(false))
             }
+        })),
+    );
+
+    // Functions to access test counters
+    env.set(
+        "get-pass-count".to_string(),
+        Value::Function(Function::Native(|_args| {
+            Ok(Value::Number(PASS_COUNT.load(Ordering::SeqCst) as f64))
+        })),
+    );
+
+    env.set(
+        "get-fail-count".to_string(),
+        Value::Function(Function::Native(|_args| {
+            Ok(Value::Number(FAIL_COUNT.load(Ordering::SeqCst) as f64))
+        })),
+    );
+
+    env.set(
+        "reset-test-counts".to_string(),
+        Value::Function(Function::Native(|_args| {
+            PASS_COUNT.store(0, Ordering::SeqCst);
+            FAIL_COUNT.store(0, Ordering::SeqCst);
+            Ok(Value::Nil)
         })),
     );
 

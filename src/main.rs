@@ -200,18 +200,18 @@ fn run_tests() {
     run_comprehensive_tests(&mut env);
 }
 
-fn run_comprehensive_tests(env: &mut Env) {
+fn run_comprehensive_tests(_env: &mut Env) {
     use std::time::Instant;
-    use std::fs;
     
     let overall_start = Instant::now();
-    println!("🧪 CORTADO COMPREHENSIVE TEST SUITE");
-    println!("=====================================");
+    println!("CORTADO COMPREHENSIVE TEST SUITE");
+    println!("=================================");
     
-    // Skip test framework loading for now - use built-in test-assert-eq
-    println!("Using built-in test functions (skipping std/test.lisp for performance)");
-    
-    // All helper functions are now native built-ins in eval.rs for maximum performance
+    // Reset global test counters
+    let mut reset_env = create_default_env();
+    if let Ok(expr) = read("(reset-test-counts)") {
+        let _ = eval(&expr, &mut reset_env);
+    }
     
     // Dynamically discover ALL test files for complete coverage
     let test_dir = std::path::Path::new("test");
@@ -241,7 +241,7 @@ fn run_comprehensive_tests(env: &mut Env) {
     // Run each test file with timeout
     for test_file in test_files {
         total_files += 1;
-        println!("\n📋 Testing: {}", test_file);
+        println!("\nTesting: {}", test_file);
         
         let start = Instant::now();
         let test_cmd = format!("(load \"test/{}\")", test_file);
@@ -268,23 +268,23 @@ fn run_comprehensive_tests(env: &mut Env) {
                         total_time += elapsed;
                         
                         if elapsed > 6.0 {
-                            println!("  ⏰ {} TIMEOUT ({:.2}s > 6.0s limit)", test_file, elapsed);
+                            println!("  TIMEOUT ({:.2}s > 6.0s limit)", elapsed);
                             timeout_files += 1;
                         } else {
-                            println!("  ✅ {} PASSED ({:.2}s)", test_file, elapsed);
+                            println!("  PASSED ({:.2}s)", elapsed);
                             passed_files += 1;
                         }
                     },
                     Err(e) => {
                         let elapsed = start.elapsed().as_secs_f64();
                         total_time += elapsed;
-                        println!("  ❌ {} FAILED: {} ({:.2}s)", test_file, e, elapsed);
+                        println!("  FAILED: {} ({:.2}s)", e, elapsed);
                         failed_files += 1;
                     }
                 }
             },
             Err(e) => {
-                println!("  💥 {} PARSE ERROR: {}", test_file, e);
+                println!("  PARSE ERROR: {}", e);
                 failed_files += 1;
             }
         }
@@ -292,22 +292,40 @@ fn run_comprehensive_tests(env: &mut Env) {
     
     let overall_elapsed = overall_start.elapsed().as_secs_f64();
     
-    println!("\n🎯 COMPREHENSIVE TEST RESULTS");
-    println!("==============================");
-    println!("📁 Total Files: {}", total_files);
-    println!("✅ Passed: {}", passed_files);
-    println!("❌ Failed: {}", failed_files);
-    println!("⏰ Timeouts: {}", timeout_files);
-    println!("⏱️  Total Time: {:.2}s", overall_elapsed);
-    println!("📊 Pass Rate: {:.1}%", if total_files > 0 { (passed_files as f64 / total_files as f64) * 100.0 } else { 0.0 });
-    println!("🚀 Avg Time/Test: {:.2}s", if total_files > 0 { total_time / total_files as f64 } else { 0.0 });
+    // Get final test counts using the eval functions
+    let mut count_env = create_default_env();
+    let total_passed = if let Ok(expr) = read("(get-pass-count)") {
+        if let Ok(Value::Number(n)) = eval(&expr, &mut count_env) {
+            n as usize
+        } else { 0 }
+    } else { 0 };
     
-    if passed_files == total_files {
-        println!("🎉 ALL TESTS PASSED!");
-    } else if passed_files > 0 {
-        println!("⚠️  PARTIAL SUCCESS - Some tests have performance or functional issues");
+    let total_failed = if let Ok(expr) = read("(get-fail-count)") {
+        if let Ok(Value::Number(n)) = eval(&expr, &mut count_env) {
+            n as usize
+        } else { 0 }
+    } else { 0 };
+    
+    let total_tests = total_passed + total_failed;
+    
+    println!("\nCOMPREHENSIVE TEST RESULTS");
+    println!("==========================");
+    println!("Total Tests: {}", total_tests);
+    println!("Passed: {}", total_passed);
+    println!("Failed: {}", total_failed);
+    println!("Files: {} passed, {} failed, {} timeout", passed_files, failed_files, timeout_files);
+    println!("Total Time: {:.2}s", overall_elapsed);
+    
+    if total_tests > 0 {
+        println!("Pass Rate: {:.1}%", (total_passed as f64 / total_tests as f64) * 100.0);
+    }
+    
+    if total_failed == 0 && timeout_files == 0 {
+        println!("ALL TESTS PASSED!");
+    } else if total_passed > 0 {
+        println!("PARTIAL SUCCESS - Some tests failed or timed out");
     } else {
-        println!("🚨 NO TESTS PASSED - Critical issues detected");
+        println!("NO TESTS PASSED - Critical issues detected");
     }
 }
 
