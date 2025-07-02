@@ -431,6 +431,37 @@ cd cortado
 cargo build --release
 ```
 
+## Learning Cortado
+
+### Getting Started
+
+New to Cortado? Start with our comprehensive programming guide:
+
+📚 **[How to Code in Cortado](docs/HOW_TO_CODE_IN_CORTADO.md)** - Complete programming guide covering:
+- Language fundamentals and syntax
+- Functional programming patterns  
+- Threading macros for readable code
+- Namespaces and modules
+- Macros and metaprogramming
+- Real-world examples and best practices
+
+### Example Programs
+
+Explore practical examples in the `examples/` directory:
+
+- `01-getting-started.lisp` - Beginner-friendly introduction
+- `02-functional-programming.lisp` - Advanced functional patterns
+- `03-data-processing.lisp` - Data transformation pipelines
+- `04-threading-macros.lisp` - Readable code with `->` and `->>`
+- `05-macros.lisp` - Metaprogramming and code transformation
+- `06-real-world-app.lisp` - Complete task management application
+- `07-advanced-topics.lisp` - Expert-level patterns and techniques
+
+Run any example:
+```bash
+cargo run examples/01-getting-started.lisp
+```
+
 ## Project Structure
 
 ```
@@ -438,8 +469,8 @@ cortado/
 ├── src/           # Rust source code
 ├── test/          # Comprehensive test suite (.lisp files)
 ├── std/           # Standard library modules
-├── examples/      # Example programs
-├── docs/          # Documentation
+├── examples/      # Example programs and tutorials
+├── docs/          # Documentation and guides
 └── README.md      # This file
 ```
 
