@@ -1641,6 +1641,98 @@ fn load_namespace(ns_name: &str, env: &mut Env) -> Result<Value, String> {
     }
 }
 
+// Special loading function that processes definitions without evaluating their bodies
+fn load_form(form: &Value, env: &mut Env) -> Result<Value, String> {
+    match form {
+        Value::List(list) if !list.is_empty() => {
+            match &list[0] {
+                Value::Symbol(name) => match name.as_str() {
+                    // For def, evaluate the value (needed for constants)
+                    "def" => eval(form, env),
+                    
+                    // For defn, create the function without evaluating the body
+                    "defn" => {
+                        if list.len() != 4 {
+                            return Err("defn requires exactly 3 arguments".to_string());
+                        }
+                        if let Value::Symbol(fname) = &list[1] {
+                            if let Value::Vector(params) = &list[2] {
+                                let mut param_names = Vec::new();
+                                for param in params {
+                                    if let Value::Symbol(pname) = param {
+                                        param_names.push(pname.clone());
+                                    } else {
+                                        return Err("Function parameters must be symbols".to_string());
+                                    }
+                                }
+                                
+                                // Create function without evaluating the body
+                                let func = Value::Function(Function::UserDefined {
+                                    params: param_names,
+                                    body: Box::new(list[3].clone()),
+                                    env: env.clone(),
+                                });
+                                
+                                env.set_namespaced(fname.clone(), func.clone());
+                                Ok(func)
+                            } else {
+                                Err("Function parameters must be a vector".to_string())
+                            }
+                        } else {
+                            Err("First argument to defn must be a symbol".to_string())
+                        }
+                    }
+                    
+                    // For defmacro, create the macro without evaluating the body
+                    "defmacro" => {
+                        if list.len() != 4 {
+                            return Err("defmacro requires exactly 3 arguments".to_string());
+                        }
+                        if let Value::Symbol(mname) = &list[1] {
+                            if let Value::Vector(params) = &list[2] {
+                                let mut param_names = Vec::new();
+                                for param in params {
+                                    if let Value::Symbol(pname) = param {
+                                        param_names.push(pname.clone());
+                                    } else {
+                                        return Err("Macro parameters must be symbols".to_string());
+                                    }
+                                }
+                                
+                                // Create macro without evaluating the body
+                                let macro_fn = Value::Function(Function::Macro {
+                                    params: param_names,
+                                    body: Box::new(list[3].clone()),
+                                    env: env.clone(),
+                                });
+                                
+                                env.set_namespaced(mname.clone(), macro_fn.clone());
+                                Ok(macro_fn)
+                            } else {
+                                Err("Macro parameters must be a vector".to_string())
+                            }
+                        } else {
+                            Err("First argument to defmacro must be a symbol".to_string())
+                        }
+                    }
+                    
+                    // For ns, handle namespace declaration
+                    "ns" => eval(form, env),
+                    
+                    // For require, handle module loading
+                    "require" => eval(form, env),
+                    
+                    // Skip other forms during module loading
+                    _ => Ok(Value::Nil),
+                },
+                _ => Ok(Value::Nil),
+            }
+        }
+        // Skip non-list forms during module loading
+        _ => Ok(Value::Nil),
+    }
+}
+
 fn load_namespace_file(file_path: &str, env: &mut Env) -> Result<Value, String> {
     // Read the file
     let content = match std::fs::read_to_string(file_path) {
@@ -1656,12 +1748,12 @@ fn load_namespace_file(file_path: &str, env: &mut Env) -> Result<Value, String> 
         Err(e) => return Err(format!("Parse error in '{}': {}", file_path, e)),
     };
 
-    // Evaluate each form
+    // Process forms - only evaluate definitions, not their bodies
     let mut last_result = Value::Nil;
     for form in forms {
-        match eval(&form, env) {
+        match load_form(&form, env) {
             Ok(result) => last_result = result,
-            Err(e) => return Err(format!("Error evaluating expression in '{}': {}", file_path, e)),
+            Err(e) => return Err(format!("Error loading form in '{}': {}", file_path, e)),
         }
     }
 

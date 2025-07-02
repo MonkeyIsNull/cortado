@@ -1,5 +1,5 @@
 ;; Minimal functional utilities
-(ns core.functional)
+(ns core.functional-minimal)
 
 ;; Identity function
 (defn identity [x]
@@ -31,9 +31,10 @@
 (defn some [pred coll]
   (if (or (nil? coll) (= coll '()))
     nil
-    (if (pred (first coll))
-      (pred (first coll))
-      (some pred (rest coll)))))
+    (let [result (pred (first coll))]
+      (if result
+        result
+        (some pred (rest coll))))))
 
 ;; Return last element of collection
 (defn last [coll]
@@ -42,8 +43,3 @@
     (if (or (nil? (rest coll)) (= (rest coll) '()))
       (first coll)
       (last (rest coll)))))
-
-;; Partial application for single argument
-(defn partial1 [f arg1]
-  (fn [x]
-    (f arg1 x)))
