@@ -12,7 +12,7 @@ A Lisp-like programming language implemented in Rust. Cortado features S-express
 - **Functions** - First-class functions with lexical closures and recursion
 - **Macros** - Code transformation with quote, quasiquote, and defmacro
 - **Local bindings** - Recursive bindings with `letrec`
-- **Comprehensive test suite** - 366 tests covering all language features
+- **Comprehensive test suite** - 382 tests covering all language features
 - **Excellent performance** - Sub-second test execution
 
 ## Quick Start
@@ -135,6 +135,30 @@ cargo run -- --help
   (+ (double 5) (triple 4)))      ; => 22
 ```
 
+### Namespaces
+```lisp
+; Switch to a namespace
+(ns my.app)
+(def config {:host "localhost" :port 8080})
+(defn start-server [] (print "Server starting..."))
+
+; Create isolated namespaces
+(ns utils.math)
+(defn square [x] (* x x))
+(defn cube [x] (* x x x))
+
+(ns utils.string)
+(defn uppercase [s] (str-upper s))
+
+; Access functions from other namespaces
+(ns main)
+(print (utils.math/square 5))     ; => 25
+(print (utils.math/cube 3))       ; => 27
+
+; Core functions are always available
+(+ 1 2 3)                         ; => 6 (core/+ is accessible)
+```
+
 ### Built-in Functions
 
 Core arithmetic and utility functions:
@@ -243,7 +267,7 @@ cortado -v script.lisp           # Verbose mode (shows all results)
 
 ## Test Suite
 
-Cortado includes a comprehensive test suite with 366 individual tests covering:
+Cortado includes a comprehensive test suite with 382 individual tests covering:
 
 - Core language features (arithmetic, variables, functions)
 - Advanced constructs (closures, recursion, macros)
@@ -251,6 +275,7 @@ Cortado includes a comprehensive test suite with 366 individual tests covering:
 - File I/O operations
 - Mathematical functions
 - Sequence operations
+- Namespace isolation and resolution
 - Performance edge cases
 
 Run the test suite:
@@ -270,11 +295,11 @@ Testing: macro-comprehensive.lisp
 
 COMPREHENSIVE TEST RESULTS
 ==========================
-Total Tests: 366
-Passed: 366
+Total Tests: 382
+Passed: 382
 Failed: 0
-Files: 11 passed, 0 failed, 0 timeout
-Total Time: 11.00s
+Files: 13 passed, 0 failed, 0 timeout
+Total Time: 13.82s
 Pass Rate: 100.0%
 ALL TESTS PASSED!
 ```
@@ -316,6 +341,8 @@ Cortado is implemented in Rust with the following components:
 - `letrec` - Local recursive bindings
 - `load` - Load and evaluate files
 - `macroexpand` - Expand macro calls
+- `ns` - Switch to namespace
+- `require` - Load namespace modules
 
 ## Performance
 

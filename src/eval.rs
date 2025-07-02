@@ -13,6 +13,7 @@ pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
         }
         Value::Symbol(name) => env
             .get(name)
+            .or_else(|| env.get_with_namespaces(name))
             .ok_or_else(|| format!("Undefined symbol: {}", name)),
         Value::Vector(items) => {
             let mut result = Vec::new();
@@ -46,6 +47,8 @@ pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
                     "letrec" => eval_letrec(list, env),
                     "load" => eval_load(list, env),
                     "do" => eval_do(list, env),
+                    "ns" => eval_ns(list, env),
+                    "require" => eval_require(list, env),
                     _ => eval_call(list, env),
                 }
             } else {
@@ -63,7 +66,7 @@ fn eval_def(list: &[Value], env: &mut Env) -> Result<Value, String> {
 
     if let Value::Symbol(name) = &list[1] {
         let value = eval(&list[2], env)?;
-        env.set(name.clone(), value.clone());
+        env.set_namespaced(name.clone(), value.clone());
         Ok(value)
     } else {
         Err("First argument to def must be a symbol".to_string())
@@ -114,7 +117,7 @@ fn eval_defn(list: &[Value], env: &mut Env) -> Result<Value, String> {
             list[3].clone(),
         ], env)?;
         
-        env.set(name.clone(), fn_value.clone());
+        env.set_namespaced(name.clone(), fn_value.clone());
         Ok(fn_value)
     } else {
         Err("First argument to defn must be a symbol".to_string())
@@ -196,7 +199,7 @@ fn eval_defmacro(list: &[Value], env: &mut Env) -> Result<Value, String> {
             env: captured_env,
         });
         
-        env.set(name.clone(), macro_fn.clone());
+        env.set_namespaced(name.clone(), macro_fn.clone());
         Ok(macro_fn)
     } else {
         Err("First argument to defmacro must be a symbol".to_string())
@@ -340,7 +343,7 @@ fn eval_load(list: &[Value], env: &mut Env) -> Result<Value, String> {
 fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
     // First check if it's a macro call
     if let Value::Symbol(name) = &list[0] {
-        if let Some(value) = env.get(name) {
+        if let Some(value) = env.get_with_namespaces(name) {
             if let Value::Function(Function::Macro { params, body, env: macro_env }) = value {
                 // It's a macro - expand it first
                 let expanded = expand_macro(&params, &body, &list[1..], &macro_env)?;
@@ -374,8 +377,8 @@ fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
 
                 // For recursion support: enhance the captured environment with the current function
                 let enhanced_env = if let Value::Symbol(func_name) = &list[0] {
-                    if captured_env.get(func_name).is_none() {
-                        if let Some(func_value) = env.get(func_name) {
+                    if captured_env.get_with_namespaces(func_name).is_none() {
+                        if let Some(func_value) = env.get_with_namespaces(func_name) {
                             let mut new_env = captured_env.clone();
                             new_env.set(func_name.clone(), func_value);
                             new_env
@@ -849,6 +852,35 @@ pub fn create_default_env() -> Env {
                 Value::Str(s) => Ok(Value::Number(s.len() as f64)),
                 _ => Err("str-length requires a string".to_string()),
             }
+        })),
+    );
+
+    env.set(
+        "str".to_string(),
+        Value::Function(Function::Native(|args| {
+            let mut result = String::new();
+            for arg in args {
+                match arg {
+                    Value::Str(s) => result.push_str(s),
+                    Value::Number(n) => result.push_str(&n.to_string()),
+                    Value::Bool(b) => result.push_str(&b.to_string()),
+                    Value::Nil => result.push_str("nil"),
+                    Value::Symbol(s) => result.push_str(s),
+                    Value::Keyword(k) => result.push_str(k),
+                    Value::List(l) => {
+                        let items: Vec<String> = l.iter().map(|v| v.to_string()).collect();
+                        result.push_str(&format!("({})", items.join(" ")));
+                    }
+                    Value::Function(f) => match f {
+                        Function::Macro { .. } => result.push_str("#<macro>"),
+                        _ => result.push_str("#<function>"),
+                    },
+                    Value::Vector(_) => result.push_str("#<vector>"),
+                    Value::Map(_) => result.push_str("#<map>"),
+                    Value::Uninitialized => result.push_str("#<uninitialized>"),
+                }
+            }
+            Ok(Value::Str(result))
         })),
     );
 
@@ -1334,11 +1366,118 @@ pub fn create_default_env() -> Env {
     env
 }
 
+fn eval_ns(list: &[Value], env: &mut Env) -> Result<Value, String> {
+    if list.len() != 2 {
+        return Err("ns requires exactly 1 argument".to_string());
+    }
+
+    match &list[1] {
+        Value::Symbol(ns_name) => {
+            env.set_namespace(ns_name.clone());
+            Ok(Value::Symbol(ns_name.clone()))
+        }
+        _ => Err("ns requires a symbol argument".to_string()),
+    }
+}
+
+fn eval_require(list: &[Value], env: &mut Env) -> Result<Value, String> {
+    if list.len() != 2 {
+        return Err("require requires exactly 1 argument".to_string());
+    }
+
+    match &list[1] {
+        Value::List(quoted) if quoted.len() == 2 => {
+            // Handle quoted symbol like '(quote my.namespace)
+            if let (Value::Symbol(quote), Value::Symbol(ns_name)) = (&quoted[0], &quoted[1]) {
+                if quote == "quote" {
+                    return load_namespace(ns_name, env);
+                }
+            }
+            Err("require expects a quoted symbol".to_string())
+        }
+        Value::Symbol(ns_name) if list[1].to_string().starts_with('\'') => {
+            // Handle quote shorthand 'my.namespace
+            let ns_name = ns_name.strip_prefix('\'').unwrap_or(ns_name);
+            load_namespace(ns_name, env)
+        }
+        _ => Err("require expects a quoted symbol like 'my.namespace".to_string()),
+    }
+}
+
+fn load_namespace(ns_name: &str, env: &mut Env) -> Result<Value, String> {
+    // Check if already loaded
+    if env.is_namespace_loaded(ns_name) {
+        return Ok(Value::Symbol(ns_name.to_string()));
+    }
+
+    // Convert namespace name to file path
+    // my.namespace -> std/my/namespace.lisp
+    let file_path = if ns_name.starts_with("core.") {
+        format!("std/{}.lisp", ns_name.replace('.', "/"))
+    } else {
+        format!("std/{}.lisp", ns_name.replace('.', "/"))
+    };
+
+    // Save current namespace
+    let current_ns = env.get_namespace().to_string();
+
+    // Set namespace for loading
+    let ns_parts: Vec<&str> = ns_name.split('.').collect();
+    let target_ns = if ns_parts.len() > 1 {
+        ns_name.to_string()
+    } else {
+        format!("user.{}", ns_name)
+    };
+
+    env.set_namespace(target_ns.clone());
+
+    // Load the file
+    let result = load_namespace_file(&file_path, env);
+
+    // Restore original namespace
+    env.set_namespace(current_ns);
+
+    match result {
+        Ok(_) => {
+            env.add_loaded_namespace(ns_name.to_string());
+            Ok(Value::Symbol(ns_name.to_string()))
+        }
+        Err(e) => Err(format!("Failed to load namespace '{}': {}", ns_name, e)),
+    }
+}
+
+fn load_namespace_file(file_path: &str, env: &mut Env) -> Result<Value, String> {
+    // Read the file
+    let content = match std::fs::read_to_string(file_path) {
+        Ok(content) => content,
+        Err(e) => return Err(format!("Failed to read file '{}': {}", file_path, e)),
+    };
+
+    // Parse all forms from the file
+    use crate::reader::read_all_forms;
+    
+    let forms = match read_all_forms(&content) {
+        Ok(forms) => forms,
+        Err(e) => return Err(format!("Parse error in '{}': {}", file_path, e)),
+    };
+
+    // Evaluate each form
+    let mut last_result = Value::Nil;
+    for form in forms {
+        match eval(&form, env) {
+            Ok(result) => last_result = result,
+            Err(e) => return Err(format!("Error evaluating expression in '{}': {}", file_path, e)),
+        }
+    }
+
+    Ok(last_result)
+}
+
 pub fn macroexpand(expr: &Value, env: &Env) -> Result<Value, String> {
     if let Value::List(list) = expr {
         if !list.is_empty() {
             if let Value::Symbol(name) = &list[0] {
-                if let Some(value) = env.get(name) {
+                if let Some(value) = env.get_with_namespaces(name) {
                     if let Value::Function(Function::Macro { params, body, env: macro_env }) = value {
                         return expand_macro_form(&params, &body, &list[1..], &macro_env);
                     }
