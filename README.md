@@ -260,7 +260,7 @@ Cortado is optimized for performance:
 Requires Rust 1.70 or later:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/MonkeyIsNull/cortado 
 cd cortado  
 cargo build --release
 ```
