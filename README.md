@@ -17,13 +17,35 @@ A Lisp-like programming language implemented in Rust. Cortado features S-express
 
 ## Quick Start
 
-Build and run the REPL:
+### Interactive REPL
+
+Start the interactive REPL with line editing, history, and multi-line support:
 
 ```bash
 cargo run
 ```
 
-Run the demo:
+### Script Execution
+
+Run a Cortado script file:
+
+```bash
+cargo run script.lisp
+cargo run -v script.lisp          # Verbose mode
+```
+
+### Expression Evaluation
+
+Evaluate expressions directly from command line:
+
+```bash
+cargo run -- -e "(+ 1 2 3)"
+cargo run -- -e "(print \"Hello, World!\")"
+```
+
+### Development Tools
+
+Run the language demo:
 
 ```bash
 cargo run demo
@@ -33,6 +55,14 @@ Run the comprehensive test suite:
 
 ```bash
 cargo run test
+```
+
+### Help
+
+Show usage information:
+
+```bash
+cargo run -- --help
 ```
 
 ## Language Examples
@@ -146,29 +176,70 @@ Core arithmetic and utility functions:
 
 ## REPL Usage
 
-Start the REPL:
+### Enhanced Interactive Experience
+
+Start the REPL with modern line editing features:
 
 ```bash
 $ cargo run
 Cortado REPL v1.0
-Standard library loading disabled (core functions available)
-Type expressions or 'exit' to quit
+Welcome to Cortado - A Lisp-like programming language
+Type expressions, :help for commands, or :quit to exit
 
 cortado> (+ 1 2 3)
 6
-cortado> (defn greet [name] (str "Hello, " name "!"))
-#<function(name)>
-cortado> (greet "World")
-"Hello, World!"
-cortado> exit
+cortado> (defn factorial [n]
+      ->   (if (= n 0) 1 (* n (factorial (- n 1)))))
+#<function(n)>
+cortado> (factorial 5)
+120
+cortado> :quit
 Goodbye!
 ```
 
-The REPL supports:
-- Single-line expression evaluation
-- Built-in functions (no external library loading needed)
-- Clean output (nil results are suppressed)
-- Exit with `exit` or `quit`
+### REPL Features
+
+- **Line editing**: Arrow keys, backspace, history navigation
+- **Multi-line input**: Automatic continuation for incomplete expressions
+- **Persistent history**: Saved to `~/.cortado_history`
+- **REPL commands**: Type `:help` for available commands
+- **Init file support**: Loads `~/.cortadorc` on startup (if exists)
+
+### REPL Commands
+
+```
+:quit, :q          Exit REPL
+:help, :h          Show help
+:env               Show environment bindings  
+:reload            Reload init file
+:load <file>       Load and evaluate file
+```
+
+### Script Execution
+
+Create executable scripts with shebang support:
+
+```lisp
+#!/usr/bin/env cortado
+
+(print "Hello from Cortado script!")
+(defn greet [name] (str "Hello, " name "!"))
+(print (greet "World"))
+```
+
+Save as `script.lisp`, make executable, and run:
+
+```bash
+chmod +x script.lisp
+./script.lisp
+```
+
+Or run directly:
+
+```bash
+cortado script.lisp              # Normal mode (only print statements show)
+cortado -v script.lisp           # Verbose mode (shows all results)
+```
 
 ## Test Suite
 
@@ -248,12 +319,12 @@ Cortado is implemented in Rust with the following components:
 
 ## Performance
 
-Cortado is optimized for performance:
+Cortado is designed for efficient execution:
 
-- Fresh environments per test file prevent memory pollution
-- Efficient recursion support without stack overflow
-- Sub-second execution for comprehensive test suite
-- Minimal memory footprint during evaluation
+- **Lightweight runtime**: Minimal memory footprint and fast startup
+- **Stack safe**: Efficient recursion support with overflow protection  
+- **Fast evaluation**: Optimized expression parsing and evaluation
+- **Interactive**: Responsive REPL with immediate feedback
 
 ## Building
 

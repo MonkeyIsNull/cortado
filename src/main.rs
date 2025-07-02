@@ -8,6 +8,8 @@ use eval::{eval, create_default_env};
 use env::Env;
 use value::Value;
 use std::io::{self, Write};
+use rustyline::Editor;
+use rustyline::error::ReadlineError;
 use std::path::Path;
 
 #[allow(dead_code)]
@@ -101,17 +103,207 @@ fn load_file(path: &Path, env: &mut Env) -> Result<(), String> {
     Ok(())
 }
 
+fn load_init_file(env: &mut Env) {
+    // Try to load ~/.cortadorc if it exists
+    if let Some(home_dir) = dirs::home_dir() {
+        let init_file = home_dir.join(".cortadorc");
+        if init_file.exists() {
+            if let Ok(content) = std::fs::read_to_string(&init_file) {
+                use crate::reader::read_all_forms;
+                if let Ok(forms) = read_all_forms(&content) {
+                    for form in forms {
+                        let _ = eval(&form, env); // Ignore errors in init file
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn handle_repl_command(cmd: &str, env: &mut Env) -> bool {
+    match cmd {
+        ":quit" | ":q" => {
+            println!("Goodbye!");
+            return false;
+        }
+        ":env" => {
+            println!("Current environment bindings:");
+            // This would require exposing environment inspection functionality
+            println!("(Environment inspection not yet implemented)");
+        }
+        ":reload" => {
+            println!("Reloading init file...");
+            load_init_file(env);
+        }
+        cmd if cmd.starts_with(":load ") => {
+            let filename = &cmd[6..].trim();
+            match std::fs::read_to_string(filename) {
+                Ok(content) => {
+                    use crate::reader::read_all_forms;
+                    match read_all_forms(&content) {
+                        Ok(forms) => {
+                            for form in forms {
+                                match eval(&form, env) {
+                                    Ok(result) => {
+                                        if result != Value::Nil {
+                                            println!("{}", result);
+                                        }
+                                    }
+                                    Err(e) => println!("Error: {}", e),
+                                }
+                            }
+                            println!("Loaded: {}", filename);
+                        }
+                        Err(e) => println!("Parse error in '{}': {}", filename, e),
+                    }
+                }
+                Err(e) => println!("Failed to load '{}': {}", filename, e),
+            }
+        }
+        ":help" | ":h" => {
+            println!("Available REPL commands:");
+            println!("  :quit, :q          Exit REPL");
+            println!("  :help, :h          Show this help");
+            println!("  :env               Show environment bindings");
+            println!("  :reload            Reload init file");
+            println!("  :load <file>       Load and evaluate file");
+        }
+        _ => {
+            println!("Unknown command: {}", cmd);
+            println!("Type :help for available commands");
+        }
+    }
+    true
+}
+
+fn count_parens(s: &str) -> i32 {
+    let mut count = 0;
+    let mut in_string = false;
+    let mut escaped = false;
+    
+    for ch in s.chars() {
+        match ch {
+            '\\' if in_string => {
+                escaped = !escaped;
+                continue;
+            }
+            '"' if !escaped => {
+                in_string = !in_string;
+            }
+            '(' if !in_string => count += 1,
+            ')' if !in_string => count -= 1,
+            _ => {}
+        }
+        escaped = false;
+    }
+    count
+}
+
 fn repl() {
     let mut env = create_default_env();
     
-    // Startup hook - automatically load standard library
     println!("Cortado REPL v1.0");
+    println!("Welcome to Cortado - A Lisp-like programming language");
+    println!("Type expressions, :help for commands, or :quit to exit");
     
-    // Standard library loading disabled due to interaction issues
-    // Core functionality is available through built-in functions
-    println!("Standard library loading disabled (core functions available)");
+    // Load init file if it exists
+    load_init_file(&mut env);
     
-    println!("Type expressions or 'exit' to quit\n");
+    let mut rl = match Editor::<()>::new() {
+        Ok(editor) => editor,
+        Err(_) => {
+            // Fall back to basic REPL if rustyline fails
+            basic_repl(&mut env);
+            return;
+        }
+    };
+    
+    // Try to load history
+    let history_path = dirs::home_dir()
+        .map(|home| home.join(".cortado_history"))
+        .unwrap_or_else(|| std::path::PathBuf::from(".cortado_history"));
+    
+    let _ = rl.load_history(&history_path);
+    
+    let mut multi_line_buffer = String::new();
+    let mut paren_count = 0;
+    
+    loop {
+        let prompt = if multi_line_buffer.is_empty() {
+            "cortado> "
+        } else {
+            "      -> "
+        };
+        
+        match rl.readline(prompt) {
+            Ok(line) => {
+                // Handle REPL commands
+                if line.trim().starts_with(':') && multi_line_buffer.is_empty() {
+                    if !handle_repl_command(line.trim(), &mut env) {
+                        break;
+                    }
+                    continue;
+                }
+                
+                // Add to history
+                rl.add_history_entry(&line);
+                
+                // Handle multi-line input
+                if !multi_line_buffer.is_empty() {
+                    multi_line_buffer.push('\n');
+                }
+                multi_line_buffer.push_str(&line);
+                
+                paren_count += count_parens(&line);
+                
+                // If parentheses are balanced, evaluate
+                if paren_count <= 0 {
+                    let input = multi_line_buffer.trim();
+                    
+                    if !input.is_empty() {
+                        match read(input) {
+                            Ok(expr) => {
+                                match eval(&expr, &mut env) {
+                                    Ok(result) => {
+                                        if result != Value::Nil {
+                                            println!("{}", result);
+                                        }
+                                    }
+                                    Err(e) => println!("Error: {}", e),
+                                }
+                            }
+                            Err(e) => println!("Parse error: {}", e),
+                        }
+                    }
+                    
+                    // Reset for next input
+                    multi_line_buffer.clear();
+                    paren_count = 0;
+                }
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("Interrupted");
+                multi_line_buffer.clear();
+                paren_count = 0;
+            }
+            Err(ReadlineError::Eof) => {
+                println!("Goodbye!");
+                break;
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        }
+    }
+    
+    // Save history
+    let _ = rl.save_history(&history_path);
+}
+
+fn basic_repl(env: &mut Env) {
+    println!("(Using basic REPL - install rustyline for better experience)");
+    println!();
     
     loop {
         print!("cortado> ");
@@ -120,7 +312,6 @@ fn repl() {
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
             Ok(0) => {
-                // EOF reached
                 println!("Goodbye!");
                 break;
             }
@@ -131,19 +322,18 @@ fn repl() {
                     continue;
                 }
                 
-                if input == "exit" || input == "quit" {
-                    println!("Goodbye!");
-                    break;
+                if input.starts_with(':') {
+                    if !handle_repl_command(input, env) {
+                        break;
+                    }
+                    continue;
                 }
                 
-                // Simple single-line evaluation for now (no multi-line support)
-                // This avoids the complex parentheses balancing that might be causing issues
                 match read(input) {
                     Ok(expr) => {
-                        match eval(&expr, &mut env) {
+                        match eval(&expr, env) {
                             Ok(result) => {
-                                // Don't print nil results to keep output clean
-                                if result.to_string() != "nil" {
+                                if result != Value::Nil {
                                     println!("{}", result);
                                 }
                             }
@@ -331,21 +521,163 @@ fn run_comprehensive_tests(_env: &mut Env) {
     }
 }
 
+fn run_script(filename: &str, verbose: bool) {
+    let mut env = create_default_env();
+    
+    // Read and parse the script file
+    let content = match std::fs::read_to_string(filename) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading file '{}': {}", filename, e);
+            std::process::exit(1);
+        }
+    };
+
+    // Skip shebang line if present
+    let content = if content.starts_with("#!") {
+        if let Some(newline_pos) = content.find('\n') {
+            &content[newline_pos + 1..]
+        } else {
+            ""
+        }
+    } else {
+        &content
+    };
+
+    // Parse all forms from the file
+    use crate::reader::read_all_forms;
+    
+    let forms = match read_all_forms(content) {
+        Ok(forms) => forms,
+        Err(e) => {
+            eprintln!("Parse error in '{}': {}", filename, e);
+            std::process::exit(1);
+        }
+    };
+
+    // Evaluate each form
+    for form in forms {
+        match eval(&form, &mut env) {
+            Ok(result) => {
+                if verbose && result != Value::Nil {
+                    println!("{}", result);
+                }
+            }
+            Err(e) => {
+                eprintln!("Runtime error in '{}': {}", filename, e);
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+fn run_eval_expression(expr: &str, verbose: bool) {
+    let mut env = create_default_env();
+    
+    match read(expr) {
+        Ok(parsed) => {
+            match eval(&parsed, &mut env) {
+                Ok(result) => {
+                    if verbose || result != Value::Nil {
+                        println!("{}", result);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Runtime error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Parse error: {}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn print_usage() {
+    println!("Cortado - A Lisp-like programming language");
+    println!();
+    println!("USAGE:");
+    println!("    cortado [OPTIONS] [SCRIPT]");
+    println!();
+    println!("ARGS:");
+    println!("    <SCRIPT>    Script file to execute (.lisp)");
+    println!();
+    println!("OPTIONS:");
+    println!("    -e, --eval <EXPR>    Evaluate expression and exit");
+    println!("    -v, --verbose        Show evaluation results in script mode");
+    println!("    -h, --help          Show this help message");
+    println!();
+    println!("COMMANDS:");
+    println!("    demo                Run language demo");
+    println!("    test                Run test suite");
+    println!();
+    println!("EXAMPLES:");
+    println!("    cortado                     # Start REPL");
+    println!("    cortado script.lisp         # Run script");
+    println!("    cortado -v script.lisp      # Run script with verbose output");
+    println!("    cortado -e '(+ 1 2 3)'      # Evaluate expression");
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     
-    if args.len() > 1 {
-        match args[1].as_str() {
-            "demo" => run_demo(),
-            "test" => run_tests(),
-            _ => {
-                println!("Usage: cortado [demo|test]");
-                println!("  demo - Run language demo");
-                println!("  test - Run test suite");
-                println!("  (no args) - Start REPL");
+    if args.len() == 1 {
+        // No arguments - start REPL
+        repl();
+        return;
+    }
+
+    let mut i = 1;
+    let mut verbose = false;
+    let mut eval_expr: Option<String> = None;
+    
+    // Parse command line arguments
+    while i < args.len() {
+        match args[i].as_str() {
+            "-h" | "--help" => {
+                print_usage();
+                return;
+            }
+            "-v" | "--verbose" => {
+                verbose = true;
+                i += 1;
+            }
+            "-e" | "--eval" => {
+                if i + 1 >= args.len() {
+                    eprintln!("Error: --eval requires an expression");
+                    std::process::exit(1);
+                }
+                eval_expr = Some(args[i + 1].clone());
+                i += 2;
+            }
+            "demo" => {
+                run_demo();
+                return;
+            }
+            "test" => {
+                run_tests();
+                return;
+            }
+            arg if arg.starts_with('-') => {
+                eprintln!("Error: Unknown option '{}'", arg);
+                eprintln!("Use --help for usage information");
+                std::process::exit(1);
+            }
+            script_file => {
+                // Treat as script file
+                run_script(script_file, verbose);
+                return;
             }
         }
+    }
+    
+    // Handle --eval option
+    if let Some(expr) = eval_expr {
+        run_eval_expression(&expr, verbose);
     } else {
-        repl();
+        // No script file provided
+        print_usage();
     }
 }
