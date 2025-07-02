@@ -494,7 +494,7 @@ fn expand_macro(params: &[String], body: &Value, args: &[Value], macro_env: &Env
     eval(body, &mut expansion_env)
 }
 
-fn expand_macro_form(params: &[String], body: &Value, args: &[Value], _macro_env: &Env) -> Result<Value, String> {
+fn expand_macro_form(params: &[String], body: &Value, args: &[Value], macro_env: &Env) -> Result<Value, String> {
     if args.len() != params.len() {
         return Err(format!(
             "Macro expects {} arguments, got {}",
@@ -503,14 +503,46 @@ fn expand_macro_form(params: &[String], body: &Value, args: &[Value], _macro_env
         ));
     }
     
-    // Create substitution map
-    let mut substitutions = std::collections::HashMap::new();
+    // Create expansion environment with parameter bindings
+    let mut expansion_env = Env::with_parent(macro_env.clone());
     for (param, arg) in params.iter().zip(args) {
-        substitutions.insert(param.clone(), arg.clone());
+        expansion_env.set(param.clone(), arg.clone());
     }
     
-    // Perform symbol substitution in the macro body
-    substitute_symbols(body, &substitutions)
+    // If the body is a quasiquote, evaluate it to get the expanded form
+    // Otherwise, do symbol substitution
+    match body {
+        Value::List(items) if !items.is_empty() => {
+            if let Value::Symbol(sym) = &items[0] {
+                if sym == "quasiquote" && items.len() == 2 {
+                    // This is a quasiquote - evaluate it to get the expansion
+                    eval_quasiquote_form(&items[1], &mut expansion_env)
+                } else {
+                    // Regular form - do symbol substitution
+                    let mut substitutions = std::collections::HashMap::new();
+                    for (param, arg) in params.iter().zip(args) {
+                        substitutions.insert(param.clone(), arg.clone());
+                    }
+                    substitute_symbols(body, &substitutions)
+                }
+            } else {
+                // Non-symbol first element - do symbol substitution
+                let mut substitutions = std::collections::HashMap::new();
+                for (param, arg) in params.iter().zip(args) {
+                    substitutions.insert(param.clone(), arg.clone());
+                }
+                substitute_symbols(body, &substitutions)
+            }
+        }
+        _ => {
+            // Non-list body - do symbol substitution
+            let mut substitutions = std::collections::HashMap::new();
+            for (param, arg) in params.iter().zip(args) {
+                substitutions.insert(param.clone(), arg.clone());
+            }
+            substitute_symbols(body, &substitutions)
+        }
+    }
 }
 
 fn substitute_symbols(expr: &Value, substitutions: &std::collections::HashMap<String, Value>) -> Result<Value, String> {
