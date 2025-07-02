@@ -298,3 +298,19 @@ pub fn read(input: &str) -> Result<Value, String> {
     
     Ok(result)
 }
+
+pub fn read_all_forms(input: &str) -> Result<Vec<Value>, String> {
+    let tokens = tokenize(input)?;
+    if tokens.is_empty() {
+        return Ok(Vec::new());
+    }
+    
+    let mut parser = Parser::new(tokens);
+    let mut forms = Vec::new();
+    
+    while parser.pos < parser.tokens.len() {
+        forms.push(parser.parse()?);
+    }
+    
+    Ok(forms)
+}

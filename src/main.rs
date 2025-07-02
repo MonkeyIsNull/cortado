@@ -10,6 +10,7 @@ use value::Value;
 use std::io::{self, Write};
 use std::path::Path;
 
+#[allow(dead_code)]
 fn load_stdlib(env: &mut Env) -> Result<(), String> {
     let std_dir = Path::new("std");
     
@@ -46,6 +47,7 @@ fn load_stdlib(env: &mut Env) -> Result<(), String> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn load_file(path: &Path, env: &mut Env) -> Result<(), String> {
     use std::fs;
     
@@ -232,15 +234,15 @@ fn run_comprehensive_tests(_env: &mut Env) {
     
     test_files.sort(); // Consistent order
     
-    let mut total_files = 0;
+    let mut _total_files = 0;
     let mut passed_files = 0;
     let mut failed_files = 0;
     let mut timeout_files = 0;
-    let mut total_time = 0.0;
+    let mut _total_time = 0.0;
     
     // Run each test file with timeout
     for test_file in test_files {
-        total_files += 1;
+        _total_files += 1;
         println!("\nTesting: {}", test_file);
         
         let start = Instant::now();
@@ -265,7 +267,7 @@ fn run_comprehensive_tests(_env: &mut Env) {
                 match eval(&expr, &mut fresh_env) {
                     Ok(_) => {
                         let elapsed = start.elapsed().as_secs_f64();
-                        total_time += elapsed;
+                        _total_time += elapsed;
                         
                         if elapsed > 6.0 {
                             println!("  TIMEOUT ({:.2}s > 6.0s limit)", elapsed);
@@ -277,7 +279,7 @@ fn run_comprehensive_tests(_env: &mut Env) {
                     },
                     Err(e) => {
                         let elapsed = start.elapsed().as_secs_f64();
-                        total_time += elapsed;
+                        _total_time += elapsed;
                         println!("  FAILED: {} ({:.2}s)", e, elapsed);
                         failed_files += 1;
                     }

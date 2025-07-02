@@ -317,53 +317,21 @@ fn eval_load(list: &[Value], env: &mut Env) -> Result<Value, String> {
         Err(e) => return Err(format!("Failed to read file '{}': {}", filename, e)),
     };
 
-    // Parse and evaluate each top-level form
-    use crate::reader::read;
+    // Parse all forms from the file using read_all_forms
+    use crate::reader::read_all_forms;
     
-    let lines: Vec<&str> = content.lines().collect();
-    let mut current_expr = String::new();
-    let mut paren_count = 0;
+    let forms = match read_all_forms(&content) {
+        Ok(forms) => forms,
+        Err(e) => return Err(format!("Parse error in '{}': {}", filename, e)),
+    };
+
+    // Evaluate each form in order
     let mut last_result = Value::Nil;
-
-    for line in lines {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with(';') {
-            continue;
+    for form in forms {
+        match eval(&form, env) {
+            Ok(result) => last_result = result,
+            Err(e) => return Err(format!("Error evaluating expression in '{}': {}", filename, e)),
         }
-
-        // Add trimmed line content (no leading/trailing whitespace issues)
-        if !current_expr.is_empty() {
-            current_expr.push(' ');
-        }
-        current_expr.push_str(trimmed);
-
-        // Count parentheses to detect complete expressions
-        for ch in trimmed.chars() {
-            match ch {
-                '(' => paren_count += 1,
-                ')' => paren_count -= 1,
-                _ => {}
-            }
-        }
-
-        // If we have a complete expression, evaluate it
-        if paren_count == 0 && !current_expr.trim().is_empty() {
-            match read(&current_expr) {
-                Ok(expr) => {
-                    match eval(&expr, env) {
-                        Ok(result) => last_result = result,
-                        Err(e) => return Err(format!("Error evaluating expression in '{}': {}", filename, e)),
-                    }
-                }
-                Err(e) => return Err(format!("Parse error in '{}': {}", filename, e)),
-            }
-            current_expr.clear();
-        }
-    }
-    
-    // Check for unbalanced parentheses
-    if paren_count != 0 {
-        return Err(format!("Unbalanced parentheses in '{}': {} unclosed", filename, paren_count));
     }
 
     Ok(last_result)
