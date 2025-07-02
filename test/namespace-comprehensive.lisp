@@ -57,4 +57,24 @@
 (def final-test "complete")
 (assert-eq final-test "complete")
 
+;; Namespace aliasing with :as
+(print "Testing namespace aliasing...")
+(require [core.seq :as s])
+(def test-list '(1 2 3 4))
+(assert-eq (s/length test-list) 4)
+(assert-eq (s/map-list (fn [x] (* x 2)) '(1 2)) '(2 4))
+(assert-eq (s/reduce-list + 0 '(1 2 3)) 6)
+
+;; Test all recursive functions work with aliases
+(assert-eq (s/filter-list (fn [x] (> x 2)) test-list) '(3 4))
+(assert-eq (s/reverse-list '(a b c)) '(c b a))
+
+;; Multiple aliases for same namespace
+(require [core.seq :as seq])
+(assert-eq (seq/length test-list) 4)
+(assert-eq (s/length test-list) 4) ; Both aliases should work
+
+;; Test more edge cases for aliasing
+(assert-eq (s/reduce-list * 1 '(2 3 4)) 24)
+
 (print "=== NAMESPACE TESTS COMPLETED SUCCESSFULLY ===")

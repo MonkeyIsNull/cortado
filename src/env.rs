@@ -7,6 +7,7 @@ pub struct Env {
     data: HashMap<String, Value>,
     current_namespace: String,
     loaded_namespaces: HashSet<String>,
+    namespace_aliases: HashMap<String, String>, // alias -> full namespace mapping
 }
 
 impl Env {
@@ -16,18 +17,21 @@ impl Env {
             data: HashMap::new(),
             current_namespace: "user".to_string(),
             loaded_namespaces: HashSet::new(),
+            namespace_aliases: HashMap::new(),
         }
     }
 
     pub fn with_parent(parent: Env) -> Self {
         let current_namespace = parent.current_namespace.clone();
         let loaded_namespaces = parent.loaded_namespaces.clone();
+        let namespace_aliases = parent.namespace_aliases.clone();
         
         Env {
             parent: Some(Box::new(parent)),
             data: HashMap::new(),
             current_namespace,
             loaded_namespaces,
+            namespace_aliases,
         }
     }
 
@@ -112,5 +116,39 @@ impl Env {
 
         // Fall back to unqualified lookup for built-ins
         self.get(name)
+    }
+
+    // Add a namespace alias
+    pub fn add_alias(&mut self, alias: String, namespace: String) {
+        self.namespace_aliases.insert(alias, namespace);
+    }
+
+    // Get the full namespace for an alias
+    pub fn resolve_alias(&self, alias: &str) -> Option<&String> {
+        if let Some(ns) = self.namespace_aliases.get(alias) {
+            Some(ns)
+        } else if let Some(parent) = &self.parent {
+            parent.resolve_alias(alias)
+        } else {
+            None
+        }
+    }
+
+    // Enhanced symbol resolution that handles aliases
+    pub fn get_with_aliases(&self, name: &str) -> Option<Value> {
+        // If name contains '/', check if the prefix is an alias
+        if let Some(slash_pos) = name.find('/') {
+            let (prefix, suffix) = name.split_at(slash_pos);
+            let suffix = &suffix[1..]; // Remove the '/'
+            
+            // Check if prefix is an alias
+            if let Some(full_ns) = self.resolve_alias(prefix) {
+                let qualified_name = format!("{}/{}", full_ns, suffix);
+                return self.get(&qualified_name);
+            }
+        }
+
+        // Fall back to regular namespace resolution
+        self.get_with_namespaces(name)
     }
 }

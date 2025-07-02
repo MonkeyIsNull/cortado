@@ -11,8 +11,9 @@ A Lisp-like programming language implemented in Rust. Cortado features S-express
 - **REPL** - Interactive Read-Eval-Print Loop
 - **Functions** - First-class functions with lexical closures and recursion
 - **Macros** - Code transformation with quote, quasiquote, and defmacro
+- **Namespaces** - Modular code organization with aliasing support (`:as`)
 - **Local bindings** - Recursive bindings with `letrec`
-- **Comprehensive test suite** - 382 tests covering all language features
+- **Comprehensive test suite** - 390 tests covering all language features
 - **Excellent performance** - Sub-second test execution
 
 ## Quick Start
@@ -155,9 +156,76 @@ cargo run -- --help
 (print (utils.math/square 5))     ; => 25
 (print (utils.math/cube 3))       ; => 27
 
-; Core functions are always available
+; Namespace aliasing with :as for shorter, more readable code
+(require [core.seq :as s])
+(def numbers '(1 2 3 4 5))
+
+; Use short alias instead of full namespace
+(s/map-list (fn [x] (* x 2)) numbers)     ; => (2 4 6 8 10)
+(s/filter-list (fn [x] (> x 3)) numbers)  ; => (4 5)
+(s/reduce-list + 0 numbers)               ; => 15
+(s/length numbers)                        ; => 5
+(s/reverse-list numbers)                  ; => (5 4 3 2 1)
+
+; Multiple aliases for the same namespace work
+(require [core.seq :as seq])
+(seq/length numbers)                      ; => 5
+
+; Compare: alias vs full qualification
+(s/map-list inc '(1 2 3))                ; Short and clean
+(core.seq/map-list inc '(1 2 3))         ; Verbose but explicit
+
+; Aliases work with all recursive and complex functions
+(s/map-list (s/length) '("a" "ab" "abc")) ; Nested aliased calls
+
+; Core functions are always available without qualification
 (+ 1 2 3)                         ; => 6 (core/+ is accessible)
 ```
+
+### Namespace Aliasing with `:as`
+
+Cortado supports namespace aliasing for cleaner, more readable code:
+
+#### Basic Aliasing Syntax
+```lisp
+; Basic require (loads from std/core/seq.lisp)
+(require 'core.seq)
+(core.seq/map-list inc '(1 2 3))           ; Verbose
+
+; Aliased require - much cleaner!
+(require [core.seq :as s])
+(s/map-list inc '(1 2 3))                  ; Clean and readable
+```
+
+#### Advanced Aliasing Examples
+```lisp
+; Multiple aliases for organization
+(require [utils.math :as math])
+(require [utils.string :as str])
+(require [data.processing :as dp])
+
+; Use short, meaningful aliases
+(math/square 5)                            ; => 25
+(str/uppercase "hello")                    ; => "HELLO"
+(dp/transform-data dataset)                ; Clean API calls
+
+; Aliases work with complex nested calls
+(s/map-list s/length '("hello" "world"))   ; => (5 5)
+(s/filter-list (fn [x] (> (s/length x) 3)) strings)
+
+; Both alias and full name work simultaneously
+(require [core.seq :as s])
+(require [core.seq :as seq])               ; Different alias
+(s/length '(1 2 3))                        ; => 3
+(seq/length '(1 2 3))                      ; => 3
+(core.seq/length '(1 2 3))                 ; => 3 (still works)
+```
+
+#### Benefits of Aliasing
+- **Readability**: `s/map-list` vs `core.seq/map-list`
+- **Consistency**: Use familiar short names like `s`, `str`, `math`
+- **Flexibility**: Multiple aliases for different contexts
+- **Compatibility**: Full qualified names still work
 
 ### Built-in Functions
 
@@ -267,7 +335,7 @@ cortado -v script.lisp           # Verbose mode (shows all results)
 
 ## Test Suite
 
-Cortado includes a comprehensive test suite with 382 individual tests covering:
+Cortado includes a comprehensive test suite with 390 individual tests covering:
 
 - Core language features (arithmetic, variables, functions)
 - Advanced constructs (closures, recursion, macros)
@@ -295,11 +363,11 @@ Testing: macro-comprehensive.lisp
 
 COMPREHENSIVE TEST RESULTS
 ==========================
-Total Tests: 382
-Passed: 382
+Total Tests: 390
+Passed: 390
 Failed: 0
 Files: 13 passed, 0 failed, 0 timeout
-Total Time: 13.82s
+Total Time: 24.45s
 Pass Rate: 100.0%
 ALL TESTS PASSED!
 ```
@@ -342,7 +410,7 @@ Cortado is implemented in Rust with the following components:
 - `load` - Load and evaluate files
 - `macroexpand` - Expand macro calls
 - `ns` - Switch to namespace
-- `require` - Load namespace modules
+- `require` - Load namespace modules (supports aliasing with `:as`)
 
 ## Performance
 

@@ -13,7 +13,7 @@ pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
         }
         Value::Symbol(name) => env
             .get(name)
-            .or_else(|| env.get_with_namespaces(name))
+            .or_else(|| env.get_with_aliases(name))
             .ok_or_else(|| format!("Undefined symbol: {}", name)),
         Value::Vector(items) => {
             let mut result = Vec::new();
@@ -343,7 +343,7 @@ fn eval_load(list: &[Value], env: &mut Env) -> Result<Value, String> {
 fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
     // First check if it's a macro call
     if let Value::Symbol(name) = &list[0] {
-        if let Some(value) = env.get_with_namespaces(name) {
+        if let Some(value) = env.get_with_aliases(name) {
             if let Value::Function(Function::Macro { params, body, env: macro_env }) = value {
                 // It's a macro - expand it first
                 let expanded = expand_macro(&params, &body, &list[1..], &macro_env)?;
@@ -377,17 +377,25 @@ fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
 
                 // For recursion support: enhance the captured environment with the current function
                 let enhanced_env = if let Value::Symbol(func_name) = &list[0] {
-                    if captured_env.get_with_namespaces(func_name).is_none() {
-                        if let Some(func_value) = env.get_with_namespaces(func_name) {
-                            let mut new_env = captured_env.clone();
-                            new_env.set(func_name.clone(), func_value);
-                            new_env
-                        } else {
-                            captured_env.clone()
-                        }
+                    let mut new_env = captured_env.clone();
+                    
+                    // If the function name is qualified (contains '/'), extract the unqualified name
+                    let unqualified_name = if let Some(slash_pos) = func_name.rfind('/') {
+                        &func_name[slash_pos + 1..]
                     } else {
-                        captured_env.clone()
+                        func_name
+                    };
+                    
+                    // Add the function to the environment with its unqualified name for self-recursion
+                    if let Some(func_value) = env.get_with_aliases(func_name) {
+                        new_env.set(unqualified_name.to_string(), func_value.clone());
+                        // Also ensure the fully qualified name is available if it wasn't already
+                        if captured_env.get_with_aliases(func_name).is_none() {
+                            new_env.set(func_name.clone(), func_value);
+                        }
                     }
+                    
+                    new_env
                 } else {
                     captured_env.clone()
                 };
@@ -1386,8 +1394,22 @@ fn eval_require(list: &[Value], env: &mut Env) -> Result<Value, String> {
     }
 
     match &list[1] {
+        // Handle [namespace :as alias] form
+        Value::Vector(vec) if vec.len() == 3 => {
+            if let (Value::Symbol(ns_name), Value::Keyword(as_kw), Value::Symbol(alias)) = 
+                (&vec[0], &vec[1], &vec[2]) {
+                if as_kw == "as" {
+                    // Load the namespace first
+                    load_namespace(ns_name, env)?;
+                    // Add the alias
+                    env.add_alias(alias.clone(), ns_name.clone());
+                    return Ok(Value::Symbol(ns_name.clone()));
+                }
+            }
+            Err("require vector form expects [namespace :as alias]".to_string())
+        }
+        // Handle quoted symbol like '(quote my.namespace)
         Value::List(quoted) if quoted.len() == 2 => {
-            // Handle quoted symbol like '(quote my.namespace)
             if let (Value::Symbol(quote), Value::Symbol(ns_name)) = (&quoted[0], &quoted[1]) {
                 if quote == "quote" {
                     return load_namespace(ns_name, env);
@@ -1395,12 +1417,12 @@ fn eval_require(list: &[Value], env: &mut Env) -> Result<Value, String> {
             }
             Err("require expects a quoted symbol".to_string())
         }
+        // Handle quote shorthand 'my.namespace
         Value::Symbol(ns_name) if list[1].to_string().starts_with('\'') => {
-            // Handle quote shorthand 'my.namespace
             let ns_name = ns_name.strip_prefix('\'').unwrap_or(ns_name);
             load_namespace(ns_name, env)
         }
-        _ => Err("require expects a quoted symbol like 'my.namespace".to_string()),
+        _ => Err("require expects 'namespace or [namespace :as alias]".to_string()),
     }
 }
 

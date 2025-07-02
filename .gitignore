@@ -1,1 +1,6 @@
 /target
+
+# Temporary test files (automatically cleaned up)
+*.txt
+*.ctl
+test-tmp/

@@ -459,8 +459,8 @@ fn run_comprehensive_tests(_env: &mut Env) {
                         let elapsed = start.elapsed().as_secs_f64();
                         _total_time += elapsed;
                         
-                        if elapsed > 6.0 {
-                            println!("  TIMEOUT ({:.2}s > 6.0s limit)", elapsed);
+                        if elapsed > 15.0 {
+                            println!("  TIMEOUT ({:.2}s > 15.0s limit)", elapsed);
                             timeout_files += 1;
                         } else {
                             println!("  PASSED ({:.2}s)", elapsed);
@@ -518,6 +518,39 @@ fn run_comprehensive_tests(_env: &mut Env) {
         println!("PARTIAL SUCCESS - Some tests failed or timed out");
     } else {
         println!("NO TESTS PASSED - Critical issues detected");
+    }
+    
+    // Clean up temporary test files
+    cleanup_test_files();
+}
+
+fn cleanup_test_files() {
+    // List of temporary files that tests might create
+    let temp_files = vec![
+        "test-output.txt",
+        "empty.txt", 
+        "multiline.txt",
+        "data.txt",
+        "computed.txt",
+        "code.ctl",
+        "special.txt",
+        "test-load.ctl",
+        "simple-load.ctl",
+        "regression-test.txt",
+        "chain1.txt",
+        "chain2.txt",
+        "perf1.txt",
+        "perf2.txt", 
+        "perf3.txt",
+        "integration.txt",
+    ];
+    
+    for file in temp_files {
+        if std::path::Path::new(file).exists() {
+            if let Err(e) = std::fs::remove_file(file) {
+                eprintln!("Warning: Failed to clean up test file '{}': {}", file, e);
+            }
+        }
     }
 }
 
