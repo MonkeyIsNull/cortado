@@ -1765,8 +1765,13 @@ fn load_form_hybrid(form: &Value, env: &mut Env) -> Result<Value, String> {
                                 // Only copy essential global functions, not the entire namespace
                                 let mut minimal_env = Env::new();
                                 
-                                // Copy only basic functions needed for most operations
-                                let essential_funcs = ["+", "-", "*", "/", "=", "<", ">", "first", "rest", "cons", "if", "list?", "nil?"];
+                                // Copy essential functions for module functions
+                                let essential_funcs = [
+                                    "+", "-", "*", "/", "=", "<", ">", "<=", ">=", "not=",
+                                    "first", "rest", "cons", "list", "list?", "nil?", "empty?",
+                                    "if", "do", "and", "or", "not", "true?", "false?",
+                                    "print", "str", "count", "concat", "vector?", "symbol?", "number?"
+                                ];
                                 for func_name in &essential_funcs {
                                     if let Some(func_val) = env.get(func_name) {
                                         minimal_env.set(func_name.to_string(), func_val);
@@ -1806,7 +1811,7 @@ fn load_form_hybrid(form: &Value, env: &mut Env) -> Result<Value, String> {
                                 let macro_fn = Value::Function(Function::Macro {
                                     params: param_names,
                                     body: Box::new(list[3].clone()),
-                                    env: Env::new(), // Macros can use minimal env
+                                    env: env.clone(), // Macros need full environment for type checking functions
                                 });
                                 
                                 env.set_namespaced(mname.clone(), macro_fn.clone());
