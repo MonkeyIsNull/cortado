@@ -145,8 +145,7 @@
 ;; Nested function calls
 (assert-eq 36 (square (inc 5)))
 (assert-eq 16 (square (dec 5)))
-(assert-eq 5 (abs (neg? -5)))  ; This should be false -> 0, then abs -> 0... wait
-;; Let me fix this test:
+;; Test abs with a variable
 (def neg-five -5)
 (assert-eq 5 (abs neg-five))
 

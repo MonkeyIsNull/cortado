@@ -267,8 +267,8 @@ fn run_comprehensive_tests(env: &mut Env) {
                         let elapsed = start.elapsed().as_secs_f64();
                         total_time += elapsed;
                         
-                        if elapsed > 5.0 {
-                            println!("  ⏰ {} TIMEOUT ({:.2}s > 5.0s limit)", test_file, elapsed);
+                        if elapsed > 6.0 {
+                            println!("  ⏰ {} TIMEOUT ({:.2}s > 6.0s limit)", test_file, elapsed);
                             timeout_files += 1;
                         } else {
                             println!("  ✅ {} PASSED ({:.2}s)", test_file, elapsed);

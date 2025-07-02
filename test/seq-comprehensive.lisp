@@ -104,10 +104,7 @@
 (print "Testing manual sequence implementations...")
 
 ;; Simple manual count function
-(defn manual-count [xs]
-  (if (nil? xs)
-    0
-    (+ 1 (manual-count (rest xs)))))
+(defn manual-count [xs] (if (nil? xs) 0 (+ 1 (manual-count (rest xs)))))
 
 ;; Test manual count
 (assert-eq 0 (manual-count nil))
@@ -115,10 +112,7 @@
 (assert-eq 1 (manual-count (list 42)))
 
 ;; Simple manual nth function (0-indexed)
-(defn manual-nth [xs n]
-  (if (= n 0)
-    (first xs)
-    (manual-nth (rest xs) (- n 1))))
+(defn manual-nth [xs n] (if (= n 0) (first xs) (manual-nth (rest xs) (- n 1))))
 
 ;; Test manual nth
 (assert-eq 1 (manual-nth (list 1 2 3) 0))

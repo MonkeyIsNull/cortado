@@ -211,16 +211,13 @@
 
 ;; Variable shadowing
 (def outer-var 1)
-(defn test-shadowing []
-  (def outer-var 2)
-  outer-var)
+(defn test-shadowing [] (do (def outer-var 2) outer-var))
 (assert-eq 2 (test-shadowing))
 (assert-eq 1 outer-var)  ; Original should be unchanged
 
 ;; Functions closing over variables
 (def closed-var 100)
-(defn make-closure []
-  (fn [] closed-var))
+(defn make-closure [] (fn [] closed-var))
 (def closure-fn (make-closure))
 (assert-eq 100 (closure-fn))
 

@@ -11,9 +11,22 @@ pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
         Value::Uninitialized => {
             Err("Cannot evaluate uninitialized value".to_string())
         }
-        Value::Symbol(name) => env
-            .get(name)
-            .ok_or_else(|| format!("Undefined symbol: {}", name)),
+        Value::Symbol(name) => {
+            // First try the current environment
+            if let Some(value) = env.get(name) {
+                Ok(value)
+            } else {
+                // If not found, check the function context stack for recursive function calls
+                CURRENT_FUNCTION_STACK.with(|stack| {
+                    for (_, context_env) in stack.borrow().iter().rev() {
+                        if let Some(value) = context_env.get(name) {
+                            return Ok(value);
+                        }
+                    }
+                    Err(format!("Undefined symbol: {}", name))
+                })
+            }
+        },
         Value::Vector(items) => {
             let mut result = Vec::new();
             for item in items {
@@ -107,7 +120,7 @@ fn eval_defn(list: &[Value], env: &mut Env) -> Result<Value, String> {
 
     if let Value::Symbol(name) = &list[1] {
         // Simple approach: define the function normally
-        // Self-recursion can be achieved using letrec when needed
+        // Self-recursion is handled in eval_call by adding function to environment during calls
         let fn_value = eval_fn(&[
             Value::Symbol("fn".to_string()),
             list[2].clone(),
@@ -405,7 +418,7 @@ fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
                 }
 
                 // Simple tail call optimization for self-recursive functions
-                eval_user_function_with_tco(params, body, captured_env, &evaluated[1..])
+                eval_user_function_with_tco(params, body, captured_env, &evaluated[1..], env)
             }
             Function::Macro { .. } => {
                 Err("Macros should be expanded before evaluation".to_string())
@@ -419,11 +432,12 @@ fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
 // Thread-local recursion depth counter to prevent stack overflow
 thread_local! {
     static RECURSION_DEPTH: RefCell<usize> = RefCell::new(0);
+    static CURRENT_FUNCTION_STACK: RefCell<Vec<(String, Env)>> = RefCell::new(Vec::new());
 }
 
 const MAX_RECURSION_DEPTH: usize = 1000;
 
-fn eval_user_function_with_tco(params: &[String], body: &Value, captured_env: &Env, args: &[Value]) -> Result<Value, String> {
+fn eval_user_function_with_tco(params: &[String], body: &Value, captured_env: &Env, args: &[Value], current_env: &Env) -> Result<Value, String> {
     // Check recursion depth to prevent stack overflow
     let current_depth = RECURSION_DEPTH.with(|d| {
         let depth = *d.borrow();
@@ -436,17 +450,26 @@ fn eval_user_function_with_tco(params: &[String], body: &Value, captured_env: &E
         return Err(format!("Maximum recursion depth {} exceeded", MAX_RECURSION_DEPTH));
     }
     
-    // PERFORMANCE FIX: Create minimal environment instead of cloning huge captured_env
-    // Only copy the global built-in functions, not all the test variables
-    let mut local_env = create_default_env();  // Fresh environment with just built-ins
+    // Create local environment with captured environment as parent for proper closure support
+    let mut local_env = Env::with_parent(captured_env.clone());
     
     // Bind arguments to parameters
     for (param, arg) in params.iter().zip(args) {
         local_env.set(param.clone(), arg.clone());
     }
     
+    // Push current environment context for recursive function lookups
+    CURRENT_FUNCTION_STACK.with(|stack| {
+        stack.borrow_mut().push(("__context__".to_string(), current_env.clone()));
+    });
+    
     // Evaluate function body
     let result = eval(body, &mut local_env);
+    
+    // Pop function context
+    CURRENT_FUNCTION_STACK.with(|stack| {
+        stack.borrow_mut().pop();
+    });
     
     // Decrement recursion depth
     RECURSION_DEPTH.with(|d| *d.borrow_mut() -= 1);
@@ -689,6 +712,8 @@ pub fn create_default_env() -> Env {
                 Value::List(list) => {
                     if list.is_empty() {
                         Ok(Value::Nil)
+                    } else if list.len() == 1 {
+                        Ok(Value::Nil)  // rest of single-element list is nil
                     } else {
                         Ok(Value::List(list[1..].to_vec()))
                     }
@@ -743,7 +768,11 @@ pub fn create_default_env() -> Env {
     env.set(
         "list".to_string(),
         Value::Function(Function::Native(|args| {
-            Ok(Value::List(args.to_vec()))
+            if args.is_empty() {
+                Ok(Value::Nil)  // (list) with no args returns nil
+            } else {
+                Ok(Value::List(args.to_vec()))
+            }
         })),
     );
 
@@ -1034,6 +1063,207 @@ pub fn create_default_env() -> Env {
                 Ok(Value::Bool((*n as i64) % 2 != 0))
             } else {
                 Err("odd? requires a number".to_string())
+            }
+        })),
+    );
+
+    // Min and max functions
+    env.set(
+        "min".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() < 2 {
+                return Err("min requires at least 2 arguments".to_string());
+            }
+            let mut result = match &args[0] {
+                Value::Number(n) => *n,
+                _ => return Err("min requires numbers".to_string()),
+            };
+            for arg in &args[1..] {
+                if let Value::Number(n) = arg {
+                    if *n < result {
+                        result = *n;
+                    }
+                } else {
+                    return Err("min requires numbers".to_string());
+                }
+            }
+            Ok(Value::Number(result))
+        })),
+    );
+
+    env.set(
+        "max".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() < 2 {
+                return Err("max requires at least 2 arguments".to_string());
+            }
+            let mut result = match &args[0] {
+                Value::Number(n) => *n,
+                _ => return Err("max requires numbers".to_string()),
+            };
+            for arg in &args[1..] {
+                if let Value::Number(n) = arg {
+                    if *n > result {
+                        result = *n;
+                    }
+                } else {
+                    return Err("max requires numbers".to_string());
+                }
+            }
+            Ok(Value::Number(result))
+        })),
+    );
+
+    // Additional predicate functions
+    env.set(
+        "true?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("true? requires exactly 1 argument".to_string());
+            }
+            Ok(Value::Bool(args[0] == Value::Bool(true)))
+        })),
+    );
+
+    env.set(
+        "false?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("false? requires exactly 1 argument".to_string());
+            }
+            Ok(Value::Bool(args[0] == Value::Bool(false)))
+        })),
+    );
+
+    env.set(
+        "some?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("some? requires exactly 1 argument".to_string());
+            }
+            Ok(Value::Bool(args[0] != Value::Nil))
+        })),
+    );
+
+    // constantly function - returns a function that always returns the given value
+    env.set(
+        "constantly".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("constantly requires exactly 1 argument".to_string());
+            }
+            let value = args[0].clone();
+            // Return a function that ignores its arguments and returns the captured value
+            Ok(Value::Function(Function::UserDefined {
+                params: vec!["_".to_string()], // dummy parameter
+                body: Box::new(value),
+                env: Env::new(), // empty environment since we just return the literal value
+            }))
+        })),
+    );
+
+    // time function - executes a function and returns its result
+    env.set(
+        "time".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("time requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Function(Function::Native(f)) => f(&[]),
+                Value::Function(Function::UserDefined { params, body, env: func_env }) => {
+                    if !params.is_empty() {
+                        return Err("time requires a function with no parameters".to_string());
+                    }
+                    // Execute the function body in its captured environment
+                    let mut exec_env = func_env.clone();
+                    eval(body, &mut exec_env)
+                }
+                _ => Err("time requires a function".to_string()),
+            }
+        })),
+    );
+
+    // when macro - (when condition body...) expands to (if condition (do body...) nil)
+    env.set(
+        "when".to_string(),
+        Value::Function(Function::Macro {
+            params: vec!["condition".to_string(), "body".to_string()],
+            body: Box::new(Value::List(vec![
+                Value::Symbol("if".to_string()),
+                Value::Symbol("condition".to_string()),
+                Value::Symbol("body".to_string()),
+                Value::Nil,
+            ])),
+            env: env.clone(),
+        }),
+    );
+
+    // unless macro - (unless condition body...) expands to (if condition nil (do body...))
+    env.set(
+        "unless".to_string(),
+        Value::Function(Function::Macro {
+            params: vec!["condition".to_string(), "body".to_string()],
+            body: Box::new(Value::List(vec![
+                Value::Symbol("if".to_string()),
+                Value::Symbol("condition".to_string()),
+                Value::Nil,
+                Value::Symbol("body".to_string()),
+            ])),
+            env: env.clone(),
+        }),
+    );
+
+    // make-timer function - returns a function that returns elapsed time since creation
+    env.set(
+        "make-timer".to_string(),
+        Value::Function(Function::Native(|args| {
+            if !args.is_empty() {
+                return Err("make-timer takes no arguments".to_string());
+            }
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let start_time = SystemTime::now().duration_since(UNIX_EPOCH)
+                .map_err(|_| "Failed to get system time".to_string())?
+                .as_millis() as f64;
+            
+            // Return a function that returns elapsed time
+            Ok(Value::Function(Function::UserDefined {
+                params: vec![],
+                body: Box::new(Value::List(vec![
+                    Value::Symbol("-".to_string()),
+                    Value::List(vec![Value::Symbol("now-ms".to_string())]),
+                    Value::Number(start_time),
+                ])),
+                env: create_default_env(), // Need access to built-in functions
+            }))
+        })),
+    );
+
+    // Mathematical functions
+    env.set(
+        "square".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("square requires exactly 1 argument".to_string());
+            }
+            if let Value::Number(n) = &args[0] {
+                Ok(Value::Number(n * n))
+            } else {
+                Err("square requires a number".to_string())
+            }
+        })),
+    );
+
+    env.set(
+        "cube".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("cube requires exactly 1 argument".to_string());
+            }
+            if let Value::Number(n) = &args[0] {
+                Ok(Value::Number(n * n * n))
+            } else {
+                Err("cube requires a number".to_string())
             }
         })),
     );
