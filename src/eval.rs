@@ -427,32 +427,18 @@ fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
                     ));
                 }
 
-                // For recursion support: enhance the captured environment with the current function
-                let enhanced_env = if let Value::Symbol(func_name) = &list[0] {
-                    let mut new_env = captured_env.clone();
-                    
-                    // Extract the unqualified name for self-recursion
-                    let unqualified_name = if let Some(slash_pos) = func_name.rfind('/') {
-                        &func_name[slash_pos + 1..]
+                // Universal self-reference: lightweight fix for all function calls
+                let self_ref_name = if let Value::Symbol(func_name) = &list[0] {
+                    if let Some(slash_pos) = func_name.rfind('/') {
+                        Some(&func_name[slash_pos + 1..])
                     } else {
-                        func_name
-                    };
-                    
-                    // CRITICAL FIX: Always add the unqualified name to enable self-recursion
-                    // This works for direct calls, qualified calls, and aliased calls
-                    let current_func_value = evaluated[0].clone();
-                    new_env.set(unqualified_name.to_string(), current_func_value.clone());
-                    
-                    // Also add the original call name (preserves the calling context)
-                    new_env.set(func_name.clone(), current_func_value);
-                    
-                    new_env
+                        Some(func_name.as_str())
+                    }
                 } else {
-                    captured_env.clone()
+                    None
                 };
 
-                // Simple tail call optimization for self-recursive functions
-                eval_user_function_with_tco(params, body, &enhanced_env, &evaluated[1..], env)
+                eval_user_function_with_tco(params, body, captured_env, &evaluated[1..], env, self_ref_name, &evaluated[0])
             }
             Function::Macro { .. } => {
                 Err("Macros should be expanded before evaluation".to_string())
@@ -470,7 +456,7 @@ thread_local! {
 
 const MAX_RECURSION_DEPTH: usize = 1000;
 
-fn eval_user_function_with_tco(params: &[String], body: &Value, captured_env: &Env, args: &[Value], _current_env: &Env) -> Result<Value, String> {
+fn eval_user_function_with_tco(params: &[String], body: &Value, captured_env: &Env, args: &[Value], _current_env: &Env, self_ref_name: Option<&str>, func_value: &Value) -> Result<Value, String> {
     // Check recursion depth to prevent stack overflow
     let current_depth = RECURSION_DEPTH.with(|d| {
         let depth = *d.borrow();
@@ -485,6 +471,11 @@ fn eval_user_function_with_tco(params: &[String], body: &Value, captured_env: &E
     
     // Create local environment with captured environment as parent for proper closure support
     let mut local_env = Env::with_parent(captured_env.clone());
+    
+    // Add self-reference for recursion support (prevents infinite loops in qualified/aliased calls)
+    if let Some(unqualified_name) = self_ref_name {
+        local_env.set(unqualified_name.to_string(), func_value.clone());
+    }
     
     // Bind arguments to parameters
     for (param, arg) in params.iter().zip(args) {

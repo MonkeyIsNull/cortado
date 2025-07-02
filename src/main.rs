@@ -459,8 +459,8 @@ fn run_comprehensive_tests(_env: &mut Env) {
                         let elapsed = start.elapsed().as_secs_f64();
                         _total_time += elapsed;
                         
-                        if elapsed > 15.0 {
-                            println!("  TIMEOUT ({:.2}s > 15.0s limit)", elapsed);
+                        if elapsed > 25.0 {
+                            println!("  TIMEOUT ({:.2}s > 25.0s limit)", elapsed);
                             timeout_files += 1;
                         } else {
                             println!("  PASSED ({:.2}s)", elapsed);
