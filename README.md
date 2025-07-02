@@ -1,9 +1,12 @@
 # Cortado ☕️
 
+![Cortado Logo](logo_cortado.png)
+
 > « Le café est une boisson qui fait dormir quand on n'en prend pas. »  
 > — *Voltaire*
 
 A Lisp-like programming language implemented in Rust. Cortado features S-expression syntax, functional programming constructs, a powerful macro system, lexical scoping, and comprehensive recursion support.
+
 
 ## Features
 
