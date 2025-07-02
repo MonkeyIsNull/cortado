@@ -186,7 +186,7 @@ Cortado is implemented in Rust with the following components:
 Requires Rust 1.70 or later:
 
 ```bash
-git clone <repository>
+git clone https://github.com/MonkeyIsNull/cortado 
 cd cortado
 cargo build --release
 ```

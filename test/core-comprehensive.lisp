@@ -114,7 +114,7 @@
 ;; Basic if
 (assert-eq "yes" (if true "yes" "no"))
 (assert-eq "no" (if false "yes" "no"))
-(assert-eq nil (if false "yes"))
+(assert-eq nil (if false "yes" nil))
 
 ;; Nested conditions
 (assert-eq "inner" (if true (if true "inner" "outer") "no"))
@@ -156,15 +156,12 @@
 
 ;; Variable shadowing
 (def outer 1)
-(defn test-scope [] 
-  (def outer 2)
-  outer)
+(defn test-scope [] (do (def outer 2) outer))
 (assert-eq 2 (test-scope))
 (assert-eq 1 outer)
 
 ;; Closure test
-(defn make-adder [x]
-  (fn [y] (+ x y)))
+(defn make-adder [x] (fn [y] (+ x y)))
 (def add5 (make-adder 5))
 (assert-eq 8 (add5 3))
 

@@ -6,6 +6,7 @@ mod eval;
 use reader::read;
 use eval::{eval, create_default_env};
 use env::Env;
+use value::Value;
 use std::io::{self, Write};
 use std::path::Path;
 
@@ -195,118 +196,119 @@ fn run_demo() {
 fn run_tests() {
     let mut env = create_default_env();
     
-    println!("Cortado Test Runner");
-    println!("Running quick validation tests...\n");
+    // Skip the eval.rs run-tests function entirely and run comprehensive tests directly
+    run_comprehensive_tests(&mut env);
+}
+
+fn run_comprehensive_tests(env: &mut Env) {
+    use std::time::Instant;
+    use std::fs;
     
-    // Run a quick set of core functionality tests
-    let tests = vec![
-        // Basic arithmetic
-        ("Arithmetic", vec![
-            ("(+ 2 3)", "5"),
-            ("(- 10 4)", "6"),
-            ("(* 6 7)", "42"),
-            ("(/ 15 3)", "5"),
-        ]),
-        
-        // Comparisons
-        ("Comparisons", vec![
-            ("(= 5 5)", "true"),
-            ("(< 3 7)", "true"),
-            ("(> 10 5)", "true"),
-            ("(<= 5 5)", "true"),
-            ("(>= 5 5)", "true"),
-        ]),
-        
-        // Variables and functions
-        ("Variables & Functions", vec![
-            ("(def x 42)", "42"),
-            ("x", "42"),
-            ("(defn double [n] (* n 2))", "#<function(n)>"),
-            ("(double 21)", "42"),
-        ]),
-        
-        // Lists
-        ("Lists", vec![
-            ("(list 1 2 3)", "(1 2 3)"),
-            ("(first (list 1 2 3))", "1"),
-            ("(rest (list 1 2 3))", "(2 3)"),
-            ("(cons 0 (list 1 2))", "(0 1 2)"),
-        ]),
-        
-        // Strings
-        ("Strings", vec![
-            ("(str \"hello\" \" \" \"world\")", "\"hello world\""),
-            ("(str-length \"hello\")", "5"),
-        ]),
-        
-        // Conditionals
-        ("Conditionals", vec![
-            ("(if true \"yes\" \"no\")", "\"yes\""),
-            ("(if false \"yes\" \"no\")", "\"no\""),
-            ("(if (= 1 1) \"equal\" \"not equal\")", "\"equal\""),
-        ]),
-    ];
+    let overall_start = Instant::now();
+    println!("🧪 CORTADO COMPREHENSIVE TEST SUITE");
+    println!("=====================================");
     
-    let mut total_pass = 0;
-    let mut total_fail = 0;
+    // Skip test framework loading for now - use built-in test-assert-eq
+    println!("Using built-in test functions (skipping std/test.lisp for performance)");
     
-    for (category, test_cases) in tests {
-        println!("Testing {}:", category);
-        let mut category_pass = 0;
-        let mut category_fail = 0;
-        
-        for (input, expected) in test_cases {
-            match read(input) {
-                Ok(expr) => {
-                    match eval(&expr, &mut env) {
-                        Ok(result) => {
-                            let result_str = result.to_string();
-                            if result_str == expected {
-                                print!("  ✓ ");
-                                category_pass += 1;
-                            } else {
-                                print!("  ✗ ");
-                                category_fail += 1;
-                                println!("FAIL: {} => {} (expected {})", input, result_str, expected);
-                                continue;
-                            }
-                            println!("PASS: {} => {}", input, expected);
-                        }
-                        Err(e) => {
-                            print!("  💥 ");
-                            category_fail += 1;
-                            println!("ERROR: {} => {}", input, e);
-                        }
+    // All helper functions are now native built-ins in eval.rs for maximum performance
+    
+    // Dynamically discover ALL test files for complete coverage
+    let test_dir = std::path::Path::new("test");
+    let mut test_files = Vec::new();
+    
+    if let Ok(entries) = std::fs::read_dir(test_dir) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.extension().map_or(false, |ext| ext == "lisp") {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        test_files.push(name.to_string());
                     }
-                }
-                Err(e) => {
-                    print!("  💥 ");
-                    category_fail += 1;
-                    println!("PARSE ERROR: {} => {}", input, e);
                 }
             }
         }
+    }
+    
+    test_files.sort(); // Consistent order
+    
+    let mut total_files = 0;
+    let mut passed_files = 0;
+    let mut failed_files = 0;
+    let mut timeout_files = 0;
+    let mut total_time = 0.0;
+    
+    // Run each test file with timeout
+    for test_file in test_files {
+        total_files += 1;
+        println!("\n📋 Testing: {}", test_file);
         
-        total_pass += category_pass;
-        total_fail += category_fail;
-        println!("  {} passed, {} failed\n", category_pass, category_fail);
+        let start = Instant::now();
+        let test_cmd = format!("(load \"test/{}\")", test_file);
+        
+        match read(&test_cmd) {
+            Ok(expr) => {
+                // PERFORMANCE FIX: Create fresh environment for each test file to prevent pollution
+                let mut fresh_env = create_default_env();
+                
+                // MINIMAL essential functions - anything more causes environment pollution
+                let essential_funcs = vec![
+                    "(defn assert-eq [expected actual] (test-assert-eq expected actual))",
+                ];
+                
+                for func in essential_funcs {
+                    if let Ok(expr) = read(func) {
+                        let _ = eval(&expr, &mut fresh_env);
+                    }
+                }
+                
+                match eval(&expr, &mut fresh_env) {
+                    Ok(_) => {
+                        let elapsed = start.elapsed().as_secs_f64();
+                        total_time += elapsed;
+                        
+                        if elapsed > 5.0 {
+                            println!("  ⏰ {} TIMEOUT ({:.2}s > 5.0s limit)", test_file, elapsed);
+                            timeout_files += 1;
+                        } else {
+                            println!("  ✅ {} PASSED ({:.2}s)", test_file, elapsed);
+                            passed_files += 1;
+                        }
+                    },
+                    Err(e) => {
+                        let elapsed = start.elapsed().as_secs_f64();
+                        total_time += elapsed;
+                        println!("  ❌ {} FAILED: {} ({:.2}s)", test_file, e, elapsed);
+                        failed_files += 1;
+                    }
+                }
+            },
+            Err(e) => {
+                println!("  💥 {} PARSE ERROR: {}", test_file, e);
+                failed_files += 1;
+            }
+        }
     }
     
-    println!("=== TEST SUMMARY ===");
-    println!("Total: {} tests", total_pass + total_fail);
-    println!("Passed: {} ({}%)", total_pass, 
-             if total_pass + total_fail > 0 { 
-                 (total_pass * 100) / (total_pass + total_fail) 
-             } else { 0 });
-    println!("Failed: {}", total_fail);
+    let overall_elapsed = overall_start.elapsed().as_secs_f64();
     
-    if total_fail == 0 {
-        println!("\n🎉 All tests passed! Cortado is working correctly.");
+    println!("\n🎯 COMPREHENSIVE TEST RESULTS");
+    println!("==============================");
+    println!("📁 Total Files: {}", total_files);
+    println!("✅ Passed: {}", passed_files);
+    println!("❌ Failed: {}", failed_files);
+    println!("⏰ Timeouts: {}", timeout_files);
+    println!("⏱️  Total Time: {:.2}s", overall_elapsed);
+    println!("📊 Pass Rate: {:.1}%", if total_files > 0 { (passed_files as f64 / total_files as f64) * 100.0 } else { 0.0 });
+    println!("🚀 Avg Time/Test: {:.2}s", if total_files > 0 { total_time / total_files as f64 } else { 0.0 });
+    
+    if passed_files == total_files {
+        println!("🎉 ALL TESTS PASSED!");
+    } else if passed_files > 0 {
+        println!("⚠️  PARTIAL SUCCESS - Some tests have performance or functional issues");
     } else {
-        println!("\n⚠️  Some tests failed. Check output above for details.");
+        println!("🚨 NO TESTS PASSED - Critical issues detected");
     }
-    
-    println!("\nFor comprehensive test suite (245+ tests), fix the performance issues first.");
 }
 
 fn main() {

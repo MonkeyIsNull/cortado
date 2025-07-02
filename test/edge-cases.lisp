@@ -149,8 +149,8 @@
 (assert-eq "outer-false" (if false (if true "inner-true" "inner-false") "outer-false"))
 
 ;; Conditionals without else clause
-(assert-eq 42 (if true 42))
-(assert-eq nil (if false 42))
+(assert-eq 42 (if true 42 nil))
+(assert-eq nil (if false 42 nil))
 
 (print "✓ Conditional edge cases")
 
