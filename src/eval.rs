@@ -11,22 +11,9 @@ pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
         Value::Uninitialized => {
             Err("Cannot evaluate uninitialized value".to_string())
         }
-        Value::Symbol(name) => {
-            // First try the current environment
-            if let Some(value) = env.get(name) {
-                Ok(value)
-            } else {
-                // If not found, check the function context stack for recursive function calls
-                CURRENT_FUNCTION_STACK.with(|stack| {
-                    for (_, context_env) in stack.borrow().iter().rev() {
-                        if let Some(value) = context_env.get(name) {
-                            return Ok(value);
-                        }
-                    }
-                    Err(format!("Undefined symbol: {}", name))
-                })
-            }
-        },
+        Value::Symbol(name) => env
+            .get(name)
+            .ok_or_else(|| format!("Undefined symbol: {}", name)),
         Value::Vector(items) => {
             let mut result = Vec::new();
             for item in items {
@@ -417,8 +404,25 @@ fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
                     ));
                 }
 
+                // For recursion support: enhance the captured environment with the current function
+                let enhanced_env = if let Value::Symbol(func_name) = &list[0] {
+                    if captured_env.get(func_name).is_none() {
+                        if let Some(func_value) = env.get(func_name) {
+                            let mut new_env = captured_env.clone();
+                            new_env.set(func_name.clone(), func_value);
+                            new_env
+                        } else {
+                            captured_env.clone()
+                        }
+                    } else {
+                        captured_env.clone()
+                    }
+                } else {
+                    captured_env.clone()
+                };
+
                 // Simple tail call optimization for self-recursive functions
-                eval_user_function_with_tco(params, body, captured_env, &evaluated[1..], env)
+                eval_user_function_with_tco(params, body, &enhanced_env, &evaluated[1..], env)
             }
             Function::Macro { .. } => {
                 Err("Macros should be expanded before evaluation".to_string())
@@ -432,12 +436,11 @@ fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
 // Thread-local recursion depth counter to prevent stack overflow
 thread_local! {
     static RECURSION_DEPTH: RefCell<usize> = RefCell::new(0);
-    static CURRENT_FUNCTION_STACK: RefCell<Vec<(String, Env)>> = RefCell::new(Vec::new());
 }
 
 const MAX_RECURSION_DEPTH: usize = 1000;
 
-fn eval_user_function_with_tco(params: &[String], body: &Value, captured_env: &Env, args: &[Value], current_env: &Env) -> Result<Value, String> {
+fn eval_user_function_with_tco(params: &[String], body: &Value, captured_env: &Env, args: &[Value], _current_env: &Env) -> Result<Value, String> {
     // Check recursion depth to prevent stack overflow
     let current_depth = RECURSION_DEPTH.with(|d| {
         let depth = *d.borrow();
@@ -458,18 +461,8 @@ fn eval_user_function_with_tco(params: &[String], body: &Value, captured_env: &E
         local_env.set(param.clone(), arg.clone());
     }
     
-    // Push current environment context for recursive function lookups
-    CURRENT_FUNCTION_STACK.with(|stack| {
-        stack.borrow_mut().push(("__context__".to_string(), current_env.clone()));
-    });
-    
     // Evaluate function body
     let result = eval(body, &mut local_env);
-    
-    // Pop function context
-    CURRENT_FUNCTION_STACK.with(|stack| {
-        stack.borrow_mut().pop();
-    });
     
     // Decrement recursion depth
     RECURSION_DEPTH.with(|d| *d.borrow_mut() -= 1);
