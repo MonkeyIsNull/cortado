@@ -431,21 +431,20 @@ fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
                 let enhanced_env = if let Value::Symbol(func_name) = &list[0] {
                     let mut new_env = captured_env.clone();
                     
-                    // If the function name is qualified (contains '/'), extract the unqualified name
+                    // Extract the unqualified name for self-recursion
                     let unqualified_name = if let Some(slash_pos) = func_name.rfind('/') {
                         &func_name[slash_pos + 1..]
                     } else {
                         func_name
                     };
                     
-                    // Add the function to the environment with its unqualified name for self-recursion
-                    if let Some(func_value) = env.get_with_aliases(func_name) {
-                        new_env.set(unqualified_name.to_string(), func_value.clone());
-                        // Also ensure the fully qualified name is available if it wasn't already
-                        if captured_env.get_with_aliases(func_name).is_none() {
-                            new_env.set(func_name.clone(), func_value);
-                        }
-                    }
+                    // CRITICAL FIX: Always add the unqualified name to enable self-recursion
+                    // This works for direct calls, qualified calls, and aliased calls
+                    let current_func_value = evaluated[0].clone();
+                    new_env.set(unqualified_name.to_string(), current_func_value.clone());
+                    
+                    // Also add the original call name (preserves the calling context)
+                    new_env.set(func_name.clone(), current_func_value);
                     
                     new_env
                 } else {
