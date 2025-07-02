@@ -49,6 +49,8 @@ pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
                     "do" => eval_do(list, env),
                     "ns" => eval_ns(list, env),
                     "require" => eval_require(list, env),
+                    "and" => eval_and(list, env),
+                    "or" => eval_or(list, env),
                     _ => eval_call(list, env),
                 }
             } else {
@@ -101,6 +103,56 @@ fn eval_do(list: &[Value], env: &mut Env) -> Result<Value, String> {
         last_result = eval(expr, env)?;
     }
     Ok(last_result)
+}
+
+fn eval_and(list: &[Value], env: &mut Env) -> Result<Value, String> {
+    // (and) returns true
+    if list.len() == 1 {
+        return Ok(Value::Bool(true));
+    }
+    
+    // Short-circuit evaluation: return first falsy value or last value
+    for expr in &list[1..] {
+        let result = eval(expr, env)?;
+        match result {
+            Value::Bool(false) | Value::Nil => return Ok(result),
+            _ => {
+                // If this is the last expression, return its value
+                if expr == list.last().unwrap() {
+                    return Ok(result);
+                }
+                // Otherwise continue to next expression
+            }
+        }
+    }
+    
+    // Should not reach here, but return true as fallback
+    Ok(Value::Bool(true))
+}
+
+fn eval_or(list: &[Value], env: &mut Env) -> Result<Value, String> {
+    // (or) returns nil  
+    if list.len() == 1 {
+        return Ok(Value::Nil);
+    }
+    
+    // Short-circuit evaluation: return first truthy value or last value
+    for expr in &list[1..] {
+        let result = eval(expr, env)?;
+        match result {
+            Value::Bool(false) | Value::Nil => {
+                // If this is the last expression, return its value
+                if expr == list.last().unwrap() {
+                    return Ok(result);
+                }
+                // Otherwise continue to next expression  
+            }
+            _ => return Ok(result), // Return first truthy value
+        }
+    }
+    
+    // Should not reach here, but return nil as fallback
+    Ok(Value::Nil)
 }
 
 fn eval_defn(list: &[Value], env: &mut Env) -> Result<Value, String> {
@@ -1368,6 +1420,137 @@ pub fn create_default_env() -> Env {
             } else {
                 Err("cube requires a number".to_string())
             }
+        })),
+    );
+
+    // Essential functional programming primitives
+    
+    // apply - apply function to collection of arguments
+    env.set(
+        "apply".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 2 {
+                return Err("apply requires exactly 2 arguments".to_string());
+            }
+            
+            let func = &args[0];
+            let arg_list = &args[1];
+            
+            // Extract arguments from list/vector
+            let call_args = match arg_list {
+                Value::List(items) => items.clone(),
+                Value::Vector(items) => items.clone(),
+                Value::Nil => vec![],
+                _ => return Err("apply requires a list or vector as second argument".to_string()),
+            };
+            
+            // Call the function with the arguments
+            match func {
+                Value::Function(Function::Native(f)) => f(&call_args),
+                Value::Function(Function::UserDefined { params, body, env: func_env }) => {
+                    if params.len() != call_args.len() {
+                        return Err(format!("Function expects {} arguments, got {}", params.len(), call_args.len()));
+                    }
+                    
+                    let mut exec_env = func_env.clone();
+                    for (param, arg) in params.iter().zip(call_args.iter()) {
+                        exec_env.set(param.clone(), arg.clone());
+                    }
+                    eval(body, &mut exec_env)
+                }
+                Value::Function(Function::Macro { .. }) => {
+                    Err("Cannot apply macro (use macroexpand instead)".to_string())
+                }
+                _ => Err("First argument to apply must be a function".to_string()),
+            }
+        })),
+    );
+    
+    // concat - concatenate collections
+    env.set(
+        "concat".to_string(),
+        Value::Function(Function::Native(|args| {
+            let mut result = Vec::new();
+            
+            for arg in args {
+                match arg {
+                    Value::List(items) => result.extend(items.clone()),
+                    Value::Vector(items) => result.extend(items.clone()),
+                    Value::Nil => {}, // nil contributes nothing
+                    _ => return Err("concat requires lists, vectors, or nil".to_string()),
+                }
+            }
+            
+            Ok(Value::List(result))
+        })),
+    );
+    
+    // Type predicate functions
+    env.set(
+        "string?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("string? requires exactly 1 argument".to_string());
+            }
+            Ok(Value::Bool(matches!(args[0], Value::Str(_))))
+        })),
+    );
+    
+    env.set(
+        "number?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("number? requires exactly 1 argument".to_string());
+            }
+            Ok(Value::Bool(matches!(args[0], Value::Number(_))))
+        })),
+    );
+    
+    env.set(
+        "vector?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("vector? requires exactly 1 argument".to_string());
+            }
+            Ok(Value::Bool(matches!(args[0], Value::Vector(_))))
+        })),
+    );
+    
+    env.set(
+        "list?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("list? requires exactly 1 argument".to_string());
+            }
+            Ok(Value::Bool(matches!(args[0], Value::List(_))))
+        })),
+    );
+    
+    env.set(
+        "map?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("map? requires exactly 1 argument".to_string());
+            }
+            Ok(Value::Bool(matches!(args[0], Value::Map(_))))
+        })),
+    );
+    
+    // empty? - check if collection is empty
+    env.set(
+        "empty?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("empty? requires exactly 1 argument".to_string());
+            }
+            let is_empty = match &args[0] {
+                Value::List(items) => items.is_empty(),
+                Value::Vector(items) => items.is_empty(),
+                Value::Str(s) => s.is_empty(),
+                Value::Nil => true,
+                _ => false,
+            };
+            Ok(Value::Bool(is_empty))
         })),
     );
 
