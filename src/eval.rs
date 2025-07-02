@@ -494,6 +494,52 @@ fn expand_macro(params: &[String], body: &Value, args: &[Value], macro_env: &Env
     eval(body, &mut expansion_env)
 }
 
+fn expand_macro_form(params: &[String], body: &Value, args: &[Value], _macro_env: &Env) -> Result<Value, String> {
+    if args.len() != params.len() {
+        return Err(format!(
+            "Macro expects {} arguments, got {}",
+            params.len(),
+            args.len()
+        ));
+    }
+    
+    // Create substitution map
+    let mut substitutions = std::collections::HashMap::new();
+    for (param, arg) in params.iter().zip(args) {
+        substitutions.insert(param.clone(), arg.clone());
+    }
+    
+    // Perform symbol substitution in the macro body
+    substitute_symbols(body, &substitutions)
+}
+
+fn substitute_symbols(expr: &Value, substitutions: &std::collections::HashMap<String, Value>) -> Result<Value, String> {
+    match expr {
+        Value::Symbol(name) => {
+            if let Some(replacement) = substitutions.get(name) {
+                Ok(replacement.clone())
+            } else {
+                Ok(expr.clone())
+            }
+        }
+        Value::List(items) => {
+            let mut result = Vec::new();
+            for item in items {
+                result.push(substitute_symbols(item, substitutions)?);
+            }
+            Ok(Value::List(result))
+        }
+        Value::Vector(items) => {
+            let mut result = Vec::new();
+            for item in items {
+                result.push(substitute_symbols(item, substitutions)?);
+            }
+            Ok(Value::Vector(result))
+        }
+        _ => Ok(expr.clone())
+    }
+}
+
 pub fn create_default_env() -> Env {
     let mut env = Env::new();
 
@@ -1301,7 +1347,7 @@ pub fn macroexpand(expr: &Value, env: &Env) -> Result<Value, String> {
             if let Value::Symbol(name) = &list[0] {
                 if let Some(value) = env.get(name) {
                     if let Value::Function(Function::Macro { params, body, env: macro_env }) = value {
-                        return expand_macro(&params, &body, &list[1..], &macro_env);
+                        return expand_macro_form(&params, &body, &list[1..], &macro_env);
                     }
                 }
             }
