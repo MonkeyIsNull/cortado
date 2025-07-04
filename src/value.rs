@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+use std::sync::{Arc, Mutex};
 use crate::env::Env;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -17,6 +19,31 @@ pub enum Function {
     },
 }
 
+#[derive(Clone)]
+pub enum IOResource {
+    Reader(Arc<Mutex<Box<dyn BufRead + Send>>>),
+    Writer(Arc<Mutex<Box<dyn Write + Send>>>),
+    InputStream(Arc<Mutex<Box<dyn Read + Send>>>),
+    OutputStream(Arc<Mutex<Box<dyn Write + Send>>>),
+}
+
+impl std::fmt::Debug for IOResource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IOResource::Reader(_) => write!(f, "IOResource::Reader"),
+            IOResource::Writer(_) => write!(f, "IOResource::Writer"),
+            IOResource::InputStream(_) => write!(f, "IOResource::InputStream"),
+            IOResource::OutputStream(_) => write!(f, "IOResource::OutputStream"),
+        }
+    }
+}
+
+impl PartialEq for IOResource {
+    fn eq(&self, _other: &Self) -> bool {
+        false // IO resources are never equal
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Symbol(String),
@@ -29,6 +56,7 @@ pub enum Value {
     Map(HashMap<String, Value>),
     Keyword(String),
     Function(Function),
+    IOResource(IOResource),
     Uninitialized,
 }
 
@@ -80,8 +108,11 @@ impl std::hash::Hash for Value {
             Value::Function(_) => {
                 9u8.hash(state);
             }
-            Value::Uninitialized => {
+            Value::IOResource(_) => {
                 10u8.hash(state);
+            }
+            Value::Uninitialized => {
+                11u8.hash(state);
             }
         }
     }
@@ -142,6 +173,12 @@ impl fmt::Display for Value {
                 Function::Macro { params, .. } => {
                     write!(f, "#<macro({})>", params.join(" "))
                 }
+            },
+            Value::IOResource(resource) => match resource {
+                IOResource::Reader(_) => write!(f, "#<reader>"),
+                IOResource::Writer(_) => write!(f, "#<writer>"),
+                IOResource::InputStream(_) => write!(f, "#<input-stream>"),
+                IOResource::OutputStream(_) => write!(f, "#<output-stream>"),
             },
             Value::Uninitialized => write!(f, "#<uninitialized>"),
         }

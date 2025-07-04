@@ -16,7 +16,9 @@ A Lisp-like programming language implemented in Rust. Cortado features S-express
 - **Macros** - Code transformation with quote, quasiquote, and defmacro
 - **Namespaces** - Modular code organization with aliasing support (`:as`)
 - **Local bindings** - Recursive bindings with `letrec`
-- **Comprehensive test suite** - 390 tests covering all language features
+- **Enhanced I/O System** - Clojure-inspired polymorphic I/O with automatic resource management
+- **File System Operations** - Complete file and directory manipulation capabilities
+- **Comprehensive test suite** - 390+ tests covering all language features
 - **Excellent performance** - Sub-second test execution
 
 ## Quick Start
@@ -185,6 +187,95 @@ cargo run -- --help
 (+ 1 2 3)                         ; => 6 (core/+ is accessible)
 ```
 
+### Enhanced I/O System
+
+Cortado features a comprehensive, Clojure-inspired I/O system with polymorphic operations and automatic resource management:
+
+#### Basic File Operations
+
+```lisp
+;; Enhanced file reading and writing
+(spit "config.txt" "host=localhost\nport=8080")  ; Write content to file
+(def config (slurp "config.txt"))                ; Read entire file
+(print config)                                   ; => "host=localhost\nport=8080"
+
+;; Legacy functions still work
+(write-file "data.txt" "some data")              ; Traditional write
+(def content (read-file "data.txt"))             ; Traditional read
+```
+
+#### Polymorphic Resource Operations
+
+```lisp
+;; Create readers and writers from various sources
+(def file-reader (reader "input.txt"))           ; File reader
+(def stdin-reader (reader :stdin))               ; Standard input reader
+(def file-writer (writer "output.txt"))          ; File writer
+(def stdout-writer (writer :stdout))             ; Standard output writer
+
+;; Copy data between resources
+(copy "source.txt" "destination.txt")            ; Copy files
+(def bytes-copied (copy file-reader file-writer)) ; Copy between streams
+```
+
+#### File System Operations
+
+```lisp
+;; File metadata and checks
+(file-exists? "myfile.txt")                      ; => true/false
+(directory? "/path/to/dir")                      ; => true/false
+(file-size "document.pdf")                       ; => size in bytes
+
+;; File manipulation
+(copy-file "original.txt" "backup.txt")          ; Copy files
+(move-file "temp.txt" "permanent.txt")           ; Move/rename files
+(delete-file "unwanted.txt")                     ; Delete files
+```
+
+#### Directory Operations
+
+```lisp
+;; Directory management
+(create-dir "new-folder")                        ; Create directory
+(def files (list-dir "."))                       ; List directory contents
+(delete-dir "old-folder")                        ; Delete directory recursively
+```
+
+#### Enhanced Standard I/O
+
+```lisp
+;; Improved console operations
+(println "Hello" "Enhanced" "I/O!")              ; => "Hello Enhanced I/O!"
+(printf "User %s has %s points\n" "Alice" 150)   ; Formatted output
+(def user-input (read-line))                     ; Read line from stdin
+```
+
+#### Practical I/O Examples
+
+```lisp
+;; Data processing pipeline
+(spit "numbers.txt" "1\n2\n3\n4\n5")
+(def numbers-text (slurp "numbers.txt"))
+(println "File contains:" numbers-text)
+
+;; Configuration management
+(def app-config {:database "localhost:5432"
+                 :cache-size 1000
+                 :debug true})
+(spit "app.config" (str app-config))
+
+;; Backup and archiving
+(when (file-exists? "important.txt")
+  (copy-file "important.txt" "important.backup")
+  (println "Backup created, size:" (file-size "important.backup") "bytes"))
+
+;; Directory organization
+(create-dir "processed")
+(create-dir "archive")
+(copy-file "data.csv" "processed/data.csv")
+(move-file "old-data.csv" "archive/old-data.csv")
+```
+
 ### Namespace Aliasing with `:as`
 
 Cortado supports namespace aliasing for cleaner, more readable code:
@@ -263,6 +354,31 @@ Core arithmetic and utility functions:
 ; String operations
 (str "Hello " "World")            ; => "Hello World"
 (str-len "hello")                 ; => 5
+
+; Enhanced I/O operations
+(slurp "file.txt")                ; Read entire file
+(spit "file.txt" "content")       ; Write content to file
+(reader "input.txt")              ; Create file reader
+(writer "output.txt")             ; Create file writer
+(copy "src.txt" "dest.txt")       ; Copy files
+
+; File system operations
+(file-exists? "path")             ; Check if file exists
+(directory? "path")               ; Check if directory
+(file-size "file.txt")            ; Get file size in bytes
+(copy-file "src" "dest")          ; Copy files
+(move-file "old" "new")           ; Move/rename files
+(delete-file "file.txt")          ; Delete file
+
+; Directory operations
+(list-dir ".")                    ; List directory contents
+(create-dir "folder")             ; Create directory
+(delete-dir "folder")             ; Delete directory
+
+; Enhanced standard I/O
+(read-line)                       ; Read line from stdin
+(println "hello" "world")         ; Print with space separation
+(printf "Hello %s\n" "World")     ; Formatted printing
 
 ; Time functions
 (time (+ 1 2))                    ; Times execution
@@ -397,6 +513,7 @@ Cortado is implemented in Rust with the following components:
 - Maps: `{:a 1 :b 2}`
 - Functions: Native and user-defined
 - Macros: Code transformation functions
+- I/O Resources: Readers, writers, input/output streams
 
 ### Special Forms
 
@@ -459,6 +576,7 @@ Explore practical examples in the `examples/` directory:
 - `05-macros.lisp` - Metaprogramming and code transformation
 - `06-real-world-app.lisp` - Complete task management application
 - `07-advanced-topics.lisp` - Expert-level patterns and techniques
+- `io-demo.lisp` - Comprehensive I/O system demonstration
 
 Run any example:
 ```bash

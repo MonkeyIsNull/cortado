@@ -1,11 +1,13 @@
 use crate::env::Env;
-use crate::value::{Value, Function};
+use crate::value::{Value, Function, IOResource};
 use std::collections::HashMap;
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
+use std::io::{BufRead, BufReader, BufWriter, Write, Read};
 
 pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
     match expr {
-        Value::Number(_) | Value::Bool(_) | Value::Nil | Value::Str(_) | Value::Keyword(_) => {
+        Value::Number(_) | Value::Bool(_) | Value::Nil | Value::Str(_) | Value::Keyword(_) | Value::IOResource(_) => {
             Ok(expr.clone())
         }
         Value::Uninitialized => {
@@ -927,6 +929,12 @@ pub fn create_default_env() -> Env {
                     },
                     Value::Vector(_) => result.push_str("#<vector>"),
                     Value::Map(_) => result.push_str("#<map>"),
+                    Value::IOResource(resource) => match resource {
+                        IOResource::Reader(_) => result.push_str("#<reader>"),
+                        IOResource::Writer(_) => result.push_str("#<writer>"),
+                        IOResource::InputStream(_) => result.push_str("#<input-stream>"),
+                        IOResource::OutputStream(_) => result.push_str("#<output-stream>"),
+                    },
                     Value::Uninitialized => result.push_str("#<uninitialized>"),
                 }
             }
@@ -1036,7 +1044,7 @@ pub fn create_default_env() -> Env {
         })),
     );
 
-    // File I/O functions
+    // File I/O functions (legacy - kept for compatibility)
     env.set(
         "read-file".to_string(),
         Value::Function(Function::Native(|args| {
@@ -1070,6 +1078,529 @@ pub fn create_default_env() -> Env {
                 }
                 _ => Err("write-file requires string filename and content".to_string()),
             }
+        })),
+    );
+
+    // Enhanced I/O functions (Clojure-inspired)
+    env.set(
+        "reader".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.is_empty() || args.len() > 2 {
+                return Err("reader requires 1-2 arguments".to_string());
+            }
+            
+            let source = &args[0];
+            let _opts = if args.len() == 2 { Some(&args[1]) } else { None };
+            
+            match source {
+                Value::Str(filename) => {
+                    match std::fs::File::open(filename) {
+                        Ok(file) => {
+                            let buf_reader = std::io::BufReader::new(file);
+                            let resource = IOResource::Reader(Arc::new(Mutex::new(Box::new(buf_reader))));
+                            Ok(Value::IOResource(resource))
+                        }
+                        Err(e) => Err(format!("Failed to open file '{}': {}", filename, e)),
+                    }
+                }
+                Value::Keyword(k) if k == "stdin" => {
+                    let stdin = std::io::stdin();
+                    let buf_reader = std::io::BufReader::new(stdin);
+                    let resource = IOResource::Reader(Arc::new(Mutex::new(Box::new(buf_reader))));
+                    Ok(Value::IOResource(resource))
+                }
+                _ => Err("reader requires a string filename or :stdin".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "writer".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.is_empty() || args.len() > 2 {
+                return Err("writer requires 1-2 arguments".to_string());
+            }
+            
+            let dest = &args[0];
+            let _opts = if args.len() == 2 { Some(&args[1]) } else { None };
+            
+            match dest {
+                Value::Str(filename) => {
+                    match std::fs::File::create(filename) {
+                        Ok(file) => {
+                            let buf_writer = std::io::BufWriter::new(file);
+                            let resource = IOResource::Writer(Arc::new(Mutex::new(Box::new(buf_writer))));
+                            Ok(Value::IOResource(resource))
+                        }
+                        Err(e) => Err(format!("Failed to create file '{}': {}", filename, e)),
+                    }
+                }
+                Value::Keyword(k) if k == "stdout" => {
+                    let stdout = std::io::stdout();
+                    let buf_writer = std::io::BufWriter::new(stdout);
+                    let resource = IOResource::Writer(Arc::new(Mutex::new(Box::new(buf_writer))));
+                    Ok(Value::IOResource(resource))
+                }
+                Value::Keyword(k) if k == "stderr" => {
+                    let stderr = std::io::stderr();
+                    let buf_writer = std::io::BufWriter::new(stderr);
+                    let resource = IOResource::Writer(Arc::new(Mutex::new(Box::new(buf_writer))));
+                    Ok(Value::IOResource(resource))
+                }
+                _ => Err("writer requires a string filename or :stdout/:stderr".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "input-stream".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("input-stream requires exactly 1 argument".to_string());
+            }
+            
+            match &args[0] {
+                Value::Str(filename) => {
+                    match std::fs::File::open(filename) {
+                        Ok(file) => {
+                            let resource = IOResource::InputStream(Arc::new(Mutex::new(Box::new(file))));
+                            Ok(Value::IOResource(resource))
+                        }
+                        Err(e) => Err(format!("Failed to open file '{}': {}", filename, e)),
+                    }
+                }
+                _ => Err("input-stream requires a string filename".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "output-stream".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("output-stream requires exactly 1 argument".to_string());
+            }
+            
+            match &args[0] {
+                Value::Str(filename) => {
+                    match std::fs::File::create(filename) {
+                        Ok(file) => {
+                            let resource = IOResource::OutputStream(Arc::new(Mutex::new(Box::new(file))));
+                            Ok(Value::IOResource(resource))
+                        }
+                        Err(e) => Err(format!("Failed to create file '{}': {}", filename, e)),
+                    }
+                }
+                _ => Err("output-stream requires a string filename".to_string()),
+            }
+        })),
+    );
+
+    // Enhanced I/O operations (slurp, spit, copy)
+    env.set(
+        "slurp".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.is_empty() || args.len() > 2 {
+                return Err("slurp requires 1-2 arguments".to_string());
+            }
+            
+            let source = &args[0];
+            let _opts = if args.len() == 2 { Some(&args[1]) } else { None };
+            
+            match source {
+                Value::Str(filename) => {
+                    match std::fs::read_to_string(filename) {
+                        Ok(content) => Ok(Value::Str(content)),
+                        Err(e) => Err(format!("Failed to read file '{}': {}", filename, e)),
+                    }
+                }
+                Value::IOResource(IOResource::Reader(reader)) => {
+                    match reader.lock() {
+                        Ok(mut r) => {
+                            let mut content = String::new();
+                            match r.read_to_string(&mut content) {
+                                Ok(_) => Ok(Value::Str(content)),
+                                Err(e) => Err(format!("Failed to read from reader: {}", e)),
+                            }
+                        }
+                        Err(e) => Err(format!("Failed to lock reader: {}", e)),
+                    }
+                }
+                _ => Err("slurp requires a string filename or reader".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "spit".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() < 2 || args.len() > 3 {
+                return Err("spit requires 2-3 arguments".to_string());
+            }
+            
+            let dest = &args[0];
+            let content = &args[1];
+            let _opts = if args.len() == 3 { Some(&args[2]) } else { None };
+            
+            let content_str = match content {
+                Value::Str(s) => s.clone(),
+                other => format!("{}", other),
+            };
+            
+            match dest {
+                Value::Str(filename) => {
+                    match std::fs::write(filename, content_str) {
+                        Ok(_) => Ok(Value::Nil),
+                        Err(e) => Err(format!("Failed to write file '{}': {}", filename, e)),
+                    }
+                }
+                Value::IOResource(IOResource::Writer(writer)) => {
+                    match writer.lock() {
+                        Ok(mut w) => {
+                            match w.write_all(content_str.as_bytes()) {
+                                Ok(_) => {
+                                    match w.flush() {
+                                        Ok(_) => Ok(Value::Nil),
+                                        Err(e) => Err(format!("Failed to flush writer: {}", e)),
+                                    }
+                                }
+                                Err(e) => Err(format!("Failed to write to writer: {}", e)),
+                            }
+                        }
+                        Err(e) => Err(format!("Failed to lock writer: {}", e)),
+                    }
+                }
+                _ => Err("spit requires a string filename or writer".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "copy".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() < 2 || args.len() > 3 {
+                return Err("copy requires 2-3 arguments".to_string());
+            }
+            
+            let input = &args[0];
+            let output = &args[1];
+            let _opts = if args.len() == 3 { Some(&args[2]) } else { None };
+            
+            match (input, output) {
+                (Value::IOResource(IOResource::Reader(reader)), Value::IOResource(IOResource::Writer(writer))) => {
+                    match (reader.lock(), writer.lock()) {
+                        (Ok(mut r), Ok(mut w)) => {
+                            match std::io::copy(&mut *r, &mut *w) {
+                                Ok(bytes_copied) => Ok(Value::Number(bytes_copied as f64)),
+                                Err(e) => Err(format!("Failed to copy data: {}", e)),
+                            }
+                        }
+                        _ => Err("Failed to lock reader or writer".to_string()),
+                    }
+                }
+                (Value::Str(input_file), Value::Str(output_file)) => {
+                    match std::fs::copy(input_file, output_file) {
+                        Ok(bytes_copied) => Ok(Value::Number(bytes_copied as f64)),
+                        Err(e) => Err(format!("Failed to copy file '{}' to '{}': {}", input_file, output_file, e)),
+                    }
+                }
+                _ => Err("copy requires two strings (filenames) or a reader and writer".to_string()),
+            }
+        })),
+    );
+
+    // File system operations
+    env.set(
+        "file-exists?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("file-exists? requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Str(path) => {
+                    Ok(Value::Bool(std::path::Path::new(path).exists()))
+                }
+                _ => Err("file-exists? requires a string path".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "directory?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("directory? requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Str(path) => {
+                    Ok(Value::Bool(std::path::Path::new(path).is_dir()))
+                }
+                _ => Err("directory? requires a string path".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "file-size".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("file-size requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Str(path) => {
+                    match std::fs::metadata(path) {
+                        Ok(metadata) => Ok(Value::Number(metadata.len() as f64)),
+                        Err(e) => Err(format!("Failed to get file size for '{}': {}", path, e)),
+                    }
+                }
+                _ => Err("file-size requires a string path".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "copy-file".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 2 {
+                return Err("copy-file requires exactly 2 arguments".to_string());
+            }
+            match (&args[0], &args[1]) {
+                (Value::Str(src), Value::Str(dest)) => {
+                    match std::fs::copy(src, dest) {
+                        Ok(bytes_copied) => Ok(Value::Number(bytes_copied as f64)),
+                        Err(e) => Err(format!("Failed to copy file '{}' to '{}': {}", src, dest, e)),
+                    }
+                }
+                _ => Err("copy-file requires two string paths".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "move-file".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 2 {
+                return Err("move-file requires exactly 2 arguments".to_string());
+            }
+            match (&args[0], &args[1]) {
+                (Value::Str(src), Value::Str(dest)) => {
+                    match std::fs::rename(src, dest) {
+                        Ok(_) => Ok(Value::Nil),
+                        Err(e) => Err(format!("Failed to move file '{}' to '{}': {}", src, dest, e)),
+                    }
+                }
+                _ => Err("move-file requires two string paths".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "delete-file".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("delete-file requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Str(path) => {
+                    match std::fs::remove_file(path) {
+                        Ok(_) => Ok(Value::Nil),
+                        Err(e) => Err(format!("Failed to delete file '{}': {}", path, e)),
+                    }
+                }
+                _ => Err("delete-file requires a string path".to_string()),
+            }
+        })),
+    );
+
+    // Directory operations
+    env.set(
+        "list-dir".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("list-dir requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Str(path) => {
+                    match std::fs::read_dir(path) {
+                        Ok(entries) => {
+                            let mut result = Vec::new();
+                            for entry in entries {
+                                match entry {
+                                    Ok(entry) => {
+                                        if let Some(name) = entry.file_name().to_str() {
+                                            result.push(Value::Str(name.to_string()));
+                                        }
+                                    }
+                                    Err(e) => return Err(format!("Failed to read directory entry: {}", e)),
+                                }
+                            }
+                            Ok(Value::List(result))
+                        }
+                        Err(e) => Err(format!("Failed to read directory '{}': {}", path, e)),
+                    }
+                }
+                _ => Err("list-dir requires a string path".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "create-dir".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("create-dir requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Str(path) => {
+                    match std::fs::create_dir_all(path) {
+                        Ok(_) => Ok(Value::Nil),
+                        Err(e) => Err(format!("Failed to create directory '{}': {}", path, e)),
+                    }
+                }
+                _ => Err("create-dir requires a string path".to_string()),
+            }
+        })),
+    );
+
+    env.set(
+        "delete-dir".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("delete-dir requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Str(path) => {
+                    match std::fs::remove_dir_all(path) {
+                        Ok(_) => Ok(Value::Nil),
+                        Err(e) => Err(format!("Failed to delete directory '{}': {}", path, e)),
+                    }
+                }
+                _ => Err("delete-dir requires a string path".to_string()),
+            }
+        })),
+    );
+
+    // Enhanced standard I/O operations
+    env.set(
+        "read-line".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() > 1 {
+                return Err("read-line requires 0-1 arguments".to_string());
+            }
+            
+            if args.is_empty() {
+                // Read from stdin
+                let mut line = String::new();
+                match std::io::stdin().read_line(&mut line) {
+                    Ok(_) => {
+                        // Remove trailing newline
+                        if line.ends_with('\n') {
+                            line.pop();
+                            if line.ends_with('\r') {
+                                line.pop();
+                            }
+                        }
+                        Ok(Value::Str(line))
+                    }
+                    Err(e) => Err(format!("Failed to read line from stdin: {}", e)),
+                }
+            } else {
+                // Read from reader
+                match &args[0] {
+                    Value::IOResource(IOResource::Reader(reader)) => {
+                        match reader.lock() {
+                            Ok(mut r) => {
+                                let mut line = String::new();
+                                match r.read_line(&mut line) {
+                                    Ok(0) => Ok(Value::Nil), // EOF
+                                    Ok(_) => {
+                                        // Remove trailing newline
+                                        if line.ends_with('\n') {
+                                            line.pop();
+                                            if line.ends_with('\r') {
+                                                line.pop();
+                                            }
+                                        }
+                                        Ok(Value::Str(line))
+                                    }
+                                    Err(e) => Err(format!("Failed to read line from reader: {}", e)),
+                                }
+                            }
+                            Err(e) => Err(format!("Failed to lock reader: {}", e)),
+                        }
+                    }
+                    _ => Err("read-line requires a reader or no arguments for stdin".to_string()),
+                }
+            }
+        })),
+    );
+
+    env.set(
+        "println".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.is_empty() {
+                println!();
+                Ok(Value::Nil)
+            } else {
+                let output = args
+                    .iter()
+                    .map(|arg| match arg {
+                        Value::Str(s) => s.clone(),
+                        other => format!("{}", other),
+                    })
+                    .collect::<Vec<String>>()
+                    .join(" ");
+                println!("{}", output);
+                Ok(Value::Nil)
+            }
+        })),
+    );
+
+    env.set(
+        "printf".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.is_empty() {
+                return Err("printf requires at least 1 argument".to_string());
+            }
+            
+            let format_str = match &args[0] {
+                Value::Str(s) => s.clone(),
+                other => format!("{}", other),
+            };
+            
+            // Simple printf implementation - just replace %s with arguments
+            let mut result = format_str.clone();
+            for (i, arg) in args.iter().skip(1).enumerate() {
+                let placeholder = format!("%{}", i + 1);
+                let value = match arg {
+                    Value::Str(s) => s.clone(),
+                    other => format!("{}", other),
+                };
+                result = result.replace(&placeholder, &value);
+            }
+            
+            // Also support %s for sequential replacement
+            let mut parts = result.split("%s");
+            let mut output = String::new();
+            let mut arg_index = 1;
+            
+            output.push_str(parts.next().unwrap_or(""));
+            for part in parts {
+                if arg_index < args.len() {
+                    let value = match &args[arg_index] {
+                        Value::Str(s) => s.clone(),
+                        other => format!("{}", other),
+                    };
+                    output.push_str(&value);
+                    arg_index += 1;
+                } else {
+                    output.push_str("%s");
+                }
+                output.push_str(part);
+            }
+            
+            print!("{}", output);
+            Ok(Value::Nil)
         })),
     );
 

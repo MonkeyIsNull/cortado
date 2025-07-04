@@ -47,6 +47,179 @@
 
 (print "✓ File I/O operations")
 
+;; === ENHANCED I/O OPERATIONS ===
+(print "Testing enhanced I/O operations...")
+
+;; Test reader/writer creation
+(def test-reader (reader "test-output.txt"))
+(assert-not-eq nil test-reader)
+
+(def test-writer (writer "enhanced-output.txt"))
+(assert-not-eq nil test-writer)
+
+;; Test slurp (enhanced read-file)
+(write-file "slurp-test.txt" "Content for slurp test")
+(assert-eq "Content for slurp test" (slurp "slurp-test.txt"))
+
+;; Test spit (enhanced write-file)
+(spit "spit-test.txt" "Content from spit")
+(assert-eq "Content from spit" (read-file "spit-test.txt"))
+
+;; Test spit with non-string values
+(spit "spit-number.txt" 42)
+(assert-eq "42" (read-file "spit-number.txt"))
+
+;; Test copy function
+(write-file "copy-source.txt" "Content to copy")
+(copy "copy-source.txt" "copy-dest.txt")
+(assert-eq "Content to copy" (read-file "copy-dest.txt"))
+
+(print "✓ Enhanced I/O operations")
+
+;; === FILE SYSTEM OPERATIONS ===
+(print "Testing file system operations...")
+
+;; Test file-exists?
+(write-file "exists-test.txt" "test")
+(assert-eq true (file-exists? "exists-test.txt"))
+(assert-eq false (file-exists? "nonexistent-file.txt"))
+
+;; Test directory?
+(assert-eq true (directory? "."))
+(assert-eq false (directory? "test-output.txt"))
+
+;; Test file-size
+(write-file "size-test.txt" "12345")
+(assert-eq 5 (file-size "size-test.txt"))
+
+;; Test copy-file
+(write-file "copy-file-source.txt" "Copy me!")
+(copy-file "copy-file-source.txt" "copy-file-dest.txt")
+(assert-eq "Copy me!" (read-file "copy-file-dest.txt"))
+
+;; Test move-file
+(write-file "move-source.txt" "Move me!")
+(move-file "move-source.txt" "move-dest.txt")
+(assert-eq false (file-exists? "move-source.txt"))
+(assert-eq true (file-exists? "move-dest.txt"))
+(assert-eq "Move me!" (read-file "move-dest.txt"))
+
+(print "✓ File system operations")
+
+;; === DIRECTORY OPERATIONS ===
+(print "Testing directory operations...")
+
+;; Test create-dir
+(create-dir "test-directory")
+(assert-eq true (directory? "test-directory"))
+
+;; Test list-dir
+(write-file "test-directory/file1.txt" "content1")
+(write-file "test-directory/file2.txt" "content2")
+(def dir-listing (list-dir "test-directory"))
+(assert-eq true (> (length dir-listing) 0))
+
+;; Test delete-file
+(write-file "delete-me.txt" "will be deleted")
+(assert-eq true (file-exists? "delete-me.txt"))
+(delete-file "delete-me.txt")
+(assert-eq false (file-exists? "delete-me.txt"))
+
+;; Test delete-dir
+(delete-dir "test-directory")
+(assert-eq false (directory? "test-directory"))
+
+(print "✓ Directory operations")
+
+;; === STANDARD I/O OPERATIONS ===
+(print "Testing standard I/O operations...")
+
+;; Test println
+(println "Test println output")
+(println "Multiple" "arguments" "test")
+(println)  ; Empty line
+
+;; Test printf
+(printf "Hello %s, you are %s years old\n" "World" "42")
+
+(print "✓ Standard I/O operations")
+
+;; === I/O STANDARD LIBRARY ===
+(print "Testing I/O standard library...")
+
+;; Load the I/O module
+(require 'io)
+
+;; Test with-open macro (basic functionality)
+(spit "with-open-test.txt" "test content")
+(def content-via-with-open
+  (io/with-open [r (reader "with-open-test.txt")]
+    (slurp r)))
+(assert-eq "test content" content-via-with-open)
+
+;; Test file-info
+(spit "info-test.txt" "info content")
+(def info (io/file-info "info-test.txt"))
+(assert-eq true (:exists info))
+(assert-eq false (:is-dir info))
+(assert-eq 12 (:size info))
+
+;; Test ensure-dir
+(io/ensure-dir "ensure-test-dir")
+(assert-eq true (directory? "ensure-test-dir"))
+
+;; Test backup-file
+(spit "backup-source.txt" "backup me")
+(def backup-path (io/backup-file "backup-source.txt"))
+(assert-eq true (file-exists? backup-path))
+(assert-eq "backup me" (slurp backup-path))
+
+;; Test safe-slurp
+(assert-eq "backup me" (io/safe-slurp "backup-source.txt"))
+(assert-eq nil (io/safe-slurp "nonexistent-file.txt"))
+
+;; Test safe-spit
+(assert-eq true (io/safe-spit "safe-test.txt" "safe content"))
+(assert-eq "safe content" (slurp "safe-test.txt"))
+
+;; Test empty-file?
+(spit "empty-test.txt" "")
+(assert-eq true (io/empty-file? "empty-test.txt"))
+(spit "nonempty-test.txt" "content")
+(assert-eq false (io/empty-file? "nonempty-test.txt"))
+
+(print "✓ I/O standard library")
+
+;; === CLEANUP ===
+(print "Cleaning up test files...")
+
+;; Clean up all test files
+(delete-file "test-output.txt")
+(delete-file "empty.txt") 
+(delete-file "multiline.txt")
+(delete-file "data.txt")
+(delete-file "enhanced-output.txt")
+(delete-file "slurp-test.txt")
+(delete-file "spit-test.txt")
+(delete-file "spit-number.txt")
+(delete-file "copy-source.txt")
+(delete-file "copy-dest.txt")
+(delete-file "exists-test.txt")
+(delete-file "size-test.txt")
+(delete-file "copy-file-source.txt")
+(delete-file "copy-file-dest.txt")
+(delete-file "move-dest.txt")
+(delete-file "with-open-test.txt")
+(delete-file "info-test.txt")
+(delete-file "backup-source.txt")
+(delete-file "backup-source.txt.bak")
+(delete-file "safe-test.txt")
+(delete-file "empty-test.txt")
+(delete-file "nonempty-test.txt")
+(delete-dir "ensure-test-dir")
+
+(print "✓ Test cleanup complete")
+
 ;; === TIME OPERATIONS ===
 (print "Testing time operations...")
 

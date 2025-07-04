@@ -14,6 +14,7 @@ Cortado is a functional programming language with Lisp-like syntax, implemented 
 - [Collections and Sequences](#collections-and-sequences)
 - [Functional Programming](#functional-programming)
 - [Threading Macros](#threading-macros)
+- [File I/O and System Operations](#file-io-and-system-operations)
 - [Namespaces and Modules](#namespaces-and-modules)
 - [Macros](#macros)
 - [Error Handling](#error-handling)
@@ -406,6 +407,342 @@ Inserts the result as the **last** argument of the next function:
 - Use `->` for **object-oriented style**: `obj.method1().method2()`
 - Use `->>` for **functional pipelines**: data flowing through transformations
 
+## File I/O and System Operations
+
+Cortado features a comprehensive, Clojure-inspired I/O system that provides powerful file manipulation, directory operations, and enhanced standard I/O capabilities. The system emphasizes polymorphic operations and resource safety.
+
+### Basic File Operations
+
+#### Reading and Writing Files
+
+```lisp
+;; Enhanced file operations (recommended)
+(spit "config.txt" "host=localhost\nport=8080")   ; Write to file
+(def config (slurp "config.txt"))                 ; Read entire file
+(println "Config:" config)
+
+;; Legacy operations (still supported)
+(write-file "data.txt" "legacy content")          ; Traditional write
+(def data (read-file "data.txt"))                 ; Traditional read
+
+;; Working with different data types
+(spit "numbers.txt" 42)                           ; Numbers automatically converted
+(spit "list.txt" '(1 2 3))                       ; Lists converted to string representation
+(spit "map.txt" {:name "John" :age 30})           ; Maps converted to string
+```
+
+#### File Type Checking and Metadata
+
+```lisp
+;; Check file existence and properties
+(file-exists? "myfile.txt")                       ; => true/false
+(directory? "/path/to/dir")                       ; => true/false  
+(file-size "document.pdf")                        ; => size in bytes
+
+;; Practical usage
+(when (file-exists? "config.txt")
+  (println "Config file size:" (file-size "config.txt") "bytes")
+  (def config (slurp "config.txt")))
+
+(unless (directory? "logs")
+  (create-dir "logs")
+  (println "Created logs directory"))
+```
+
+### Advanced I/O Operations
+
+#### Polymorphic Resource Creation
+
+```lisp
+;; Create readers from different sources
+(def file-reader (reader "input.txt"))           ; File reader
+(def stdin-reader (reader :stdin))               ; Standard input reader
+
+;; Create writers for different destinations  
+(def file-writer (writer "output.txt"))          ; File writer
+(def stdout-writer (writer :stdout))             ; Standard output
+(def stderr-writer (writer :stderr))             ; Standard error
+
+;; Using readers and writers
+(def content (slurp file-reader))                ; Read from reader
+(spit file-writer "Hello from writer!")          ; Write to writer
+```
+
+#### Stream Operations and Data Transfer
+
+```lisp
+;; Copy data between different sources
+(copy "source.txt" "destination.txt")            ; File to file
+(copy file-reader file-writer)                   ; Stream to stream
+(def bytes-copied (copy "large-file.dat" "backup.dat"))
+(println "Copied" bytes-copied "bytes")
+
+;; Input and output streams for binary data
+(def input-stream (input-stream "binary-file.dat"))
+(def output-stream (output-stream "output.dat"))
+```
+
+### File System Operations
+
+#### File Manipulation
+
+```lisp
+;; Copy, move, and delete files
+(copy-file "important.txt" "backup.txt")         ; Create backup
+(move-file "temp.txt" "permanent.txt")           ; Rename/move file
+(delete-file "unwanted.txt")                     ; Remove file
+
+;; Practical file management
+(defn backup-file [filename]
+  (when (file-exists? filename)
+    (let [backup-name (str filename ".backup")]
+      (copy-file filename backup-name)
+      (println "Backed up" filename "to" backup-name)
+      backup-name)))
+
+(defn safe-delete [filename]
+  (when (file-exists? filename)
+    (backup-file filename)
+    (delete-file filename)
+    (println "Safely deleted" filename)))
+```
+
+#### Directory Operations
+
+```lisp
+;; Directory management
+(create-dir "project")                            ; Create single directory
+(create-dir "project/src/utils")                  ; Create nested directories
+(def files (list-dir "."))                       ; List current directory
+(delete-dir "temp-folder")                       ; Delete directory and contents
+
+;; Directory organization
+(defn organize-files []
+  (create-dir "processed")
+  (create-dir "archive")
+  (create-dir "backup")
+  
+  ;; Move files based on criteria
+  (doseq [file (list-dir ".")]
+    (cond
+      (str-ends-with? file ".txt")
+        (move-file file (str "processed/" file))
+      (str-ends-with? file ".old")
+        (move-file file (str "archive/" file))
+      (str-ends-with? file ".bak")
+        (move-file file (str "backup/" file)))))
+```
+
+### Enhanced Standard I/O
+
+#### Interactive Input and Output
+
+```lisp
+;; Enhanced output functions
+(println "Hello" "World" "from" "Cortado!")      ; Space-separated output
+(println)                                        ; Empty line
+(printf "User %s has %s points\n" "Alice" 150)   ; Formatted output
+(printf "Progress: %s%%\n" 75)                   ; Percentage display
+
+;; Reading user input
+(println "What's your name?")
+(def username (read-line))                       ; Read from stdin
+(printf "Hello, %s!\n" username)
+
+;; Reading from different sources
+(def file-reader (reader "input.txt"))
+(def line (read-line file-reader))               ; Read from file reader
+```
+
+#### Interactive Programs
+
+```lisp
+;; Simple interactive program
+(defn interactive-calculator []
+  (println "Simple Calculator (type 'quit' to exit)")
+  (loop []
+    (print "Enter expression: ")
+    (def input (read-line))
+    (unless (= input "quit")
+      (try
+        (def result (eval (read-string input)))
+        (printf "Result: %s\n" result)
+        (catch Exception e
+          (printf "Error: %s\n" e)))
+      (recur)))
+  (println "Goodbye!"))
+```
+
+### File Processing Patterns
+
+#### Line-by-Line Processing
+
+```lisp
+;; Process large files efficiently
+(defn count-lines [filename]
+  (if (file-exists? filename)
+    (let [reader (reader filename)]
+      (loop [count 0]
+        (let [line (read-line reader)]
+          (if line
+            (recur (+ count 1))
+            count))))
+    0))
+
+(defn process-log-file [filename]
+  (when (file-exists? filename)
+    (let [reader (reader filename)]
+      (loop [line-num 1]
+        (let [line (read-line reader)]
+          (when line
+            (when (str-contains? line "ERROR")
+              (printf "Line %s: %s\n" line-num line))
+            (recur (+ line-num 1))))))))
+```
+
+#### Configuration File Handling
+
+```lisp
+;; Configuration management
+(defn load-config [filename]
+  (if (file-exists? filename)
+    (let [content (slurp filename)]
+      (read-string content))                      ; Parse as Cortado data
+    {:default true}))                             ; Default config
+
+(defn save-config [filename config]
+  (spit filename (str config))
+  (println "Configuration saved to" filename))
+
+;; Usage
+(def app-config (load-config "app.config"))
+(def updated-config (assoc app-config :version "1.2.0"))
+(save-config "app.config" updated-config)
+```
+
+#### Data Export and Import
+
+```lisp
+;; CSV-like data processing
+(defn export-data [filename data]
+  "Export list of maps to a simple format"
+  (let [writer (writer filename)]
+    (doseq [item data]
+      (spit writer (str item "\n"))))
+  (println "Exported" (length data) "items to" filename))
+
+(defn import-data [filename]
+  "Import data from file"
+  (if (file-exists? filename)
+    (let [content (slurp filename)
+          lines (str-split content "\n")]
+      (map read-string lines))
+    []))
+
+;; Usage
+(def users [{:name "Alice" :age 30} 
+            {:name "Bob" :age 25}
+            {:name "Carol" :age 35}])
+(export-data "users.dat" users)
+(def loaded-users (import-data "users.dat"))
+```
+
+### Advanced I/O Patterns
+
+#### Batch File Processing
+
+```lisp
+;; Process multiple files
+(defn process-all-files [directory extension processor-fn]
+  (let [files (list-dir directory)]
+    (doseq [file files]
+      (when (str-ends-with? file extension)
+        (let [full-path (str directory "/" file)]
+          (println "Processing" full-path)
+          (processor-fn full-path))))))
+
+;; Example: Convert all .txt files to uppercase
+(defn uppercase-file [filename]
+  (let [content (slurp filename)
+        upper-content (str-upper content)]
+    (spit filename upper-content)))
+
+(process-all-files "documents" ".txt" uppercase-file)
+```
+
+#### Atomic File Operations
+
+```lisp
+;; Safe file writing with atomic operations
+(defn atomic-write [filename content]
+  (let [temp-file (str filename ".tmp")]
+    (spit temp-file content)                     ; Write to temp file first
+    (move-file temp-file filename)               ; Atomic move
+    (println "Atomically wrote" filename)))
+
+;; Safe configuration updates
+(defn update-config-safely [filename update-fn]
+  (let [config (load-config filename)
+        updated-config (update-fn config)]
+    (atomic-write filename (str updated-config))))
+```
+
+#### Resource Management Patterns
+
+```lisp
+;; Manual resource management
+(defn process-with-cleanup [input-file output-file]
+  (let [reader (reader input-file)
+        writer (writer output-file)]
+    (try
+      ;; Process data
+      (loop [line (read-line reader)]
+        (when line
+          (let [processed (str-upper line)]
+            (spit writer (str processed "\n")))
+          (recur (read-line reader))))
+      (finally
+        ;; Note: In a full implementation, you would close resources here
+        (println "Processing complete")))))
+```
+
+### I/O Error Handling
+
+#### Robust File Operations
+
+```lisp
+;; Safe file operations with error handling
+(defn safe-read-file [filename default-content]
+  (if (file-exists? filename)
+    (slurp filename)
+    (do
+      (println "File" filename "not found, using default")
+      default-content)))
+
+(defn safe-write-file [filename content]
+  (try
+    (spit filename content)
+    true
+    (catch Exception e
+      (printf "Failed to write %s: %s\n" filename e)
+      false)))
+
+;; Validate file before processing
+(defn validate-and-process [filename]
+  (cond
+    (not (file-exists? filename))
+      (printf "Error: File %s does not exist\n" filename)
+    (directory? filename)
+      (printf "Error: %s is a directory, not a file\n" filename)
+    (= (file-size filename) 0)
+      (printf "Warning: File %s is empty\n" filename)
+    :else
+      (do
+        (println "Processing" filename)
+        (def content (slurp filename))
+        (process-content content))))
+```
+
 ## Namespaces and Modules
 
 ### Creating Namespaces
@@ -568,6 +905,74 @@ Macros transform code at compile time, enabling powerful metaprogramming.
     (s/map-list calculate-score
       (s/map-list normalize
         (s/filter-list valid? data)))))
+```
+
+### File Processing Pipelines
+
+```lisp
+;; Read, process, and write data pipeline
+(defn process-data-file [input-file output-file transform-fn]
+  (t/->3 input-file
+         slurp                          ; Read file content
+         transform-fn                   ; Apply transformation
+         (spit output-file)))           ; Write to output
+
+;; Log file analysis pipeline
+(defn analyze-log-file [log-file]
+  (let [reader (reader log-file)]
+    (t/->>3 reader
+            read-all-lines              ; Read all lines
+            (s/filter-list error-line?) ; Find error lines
+            (s/map-list parse-error)    ; Parse error details
+            (s/reduce-list count-errors))))
+
+;; Batch file processing with error handling
+(defn safe-process-files [directory pattern processor]
+  (t/->>2 directory
+          list-dir                      ; List all files
+          (s/filter-list #(str-contains? % pattern)) ; Filter by pattern
+          (s/map-list #(try-process % processor))))   ; Process each safely
+
+(defn try-process [filename processor]
+  (try
+    (processor filename)
+    (printf "✓ Processed %s\n" filename)
+    (catch Exception e
+      (printf "✗ Failed to process %s: %s\n" filename e))))
+```
+
+### Configuration and State Management
+
+```lisp
+;; Application configuration pattern
+(def config-file "app.config")
+
+(defn load-app-config []
+  (if (file-exists? config-file)
+    (let [content (slurp config-file)]
+      (read-string content))
+    {:host "localhost" :port 8080 :debug false}))
+
+(defn save-app-config [config]
+  (spit config-file (str config))
+  (println "Configuration saved"))
+
+(defn update-config [key value]
+  (t/->2 (load-app-config)
+         (assoc key value)
+         save-app-config))
+
+;; State persistence pattern
+(defn save-state [filename state]
+  (let [temp-file (str filename ".tmp")]
+    (spit temp-file (str state))        ; Write to temp file
+    (move-file temp-file filename)      ; Atomic move
+    (println "State saved to" filename)))
+
+(defn load-state [filename default-state]
+  (if (file-exists? filename)
+    (read-string (slurp filename))
+    default-state))
 ```
 
 ### Configuration and Setup
@@ -743,6 +1148,72 @@ Macros transform code at compile time, enabling powerful metaprogramming.
 (defn test-add-zero []
   (assert-eq 5 (add 5 0))
   (assert-eq 0 (add 0 0)))
+```
+
+### File I/O Best Practices
+
+```lisp
+;; 1. Always check file existence before operations
+(defn safe-process-file [filename]
+  (if (file-exists? filename)
+    (process-content (slurp filename))
+    (printf "Warning: File %s not found\n" filename)))
+
+;; 2. Use atomic operations for critical writes
+(defn atomic-save [filename data]
+  (let [temp-file (str filename ".tmp")]
+    (spit temp-file (str data))
+    (move-file temp-file filename)))
+
+;; 3. Validate file types and sizes
+(defn validate-input-file [filename max-size]
+  (cond
+    (not (file-exists? filename))
+      (error "File does not exist:" filename)
+    (directory? filename)
+      (error "Expected file, got directory:" filename)
+    (> (file-size filename) max-size)
+      (error "File too large:" filename)
+    :else true))
+
+;; 4. Use descriptive error messages
+(defn read-config-file [filename]
+  (cond
+    (not (file-exists? filename))
+      (error "Configuration file missing:" filename 
+             "Create it with default settings first")
+    (= (file-size filename) 0)
+      (error "Configuration file is empty:" filename)
+    :else
+      (read-string (slurp filename))))
+
+;; 5. Create backup copies for important operations
+(defn update-important-file [filename new-content]
+  (when (file-exists? filename)
+    (copy-file filename (str filename ".backup")))
+  (spit filename new-content))
+
+;; 6. Use consistent directory structure
+(defn setup-app-directories []
+  (create-dir "config")
+  (create-dir "data")
+  (create-dir "logs")
+  (create-dir "backup"))
+
+;; 7. Handle different file encodings gracefully
+(defn read-text-file-safely [filename]
+  (try
+    (slurp filename)
+    (catch Exception e
+      (printf "Failed to read %s as text: %s\n" filename e)
+      nil)))
+
+;; 8. Use meaningful file naming conventions
+(defn generate-log-filename []
+  (str "logs/app-" (format-date (now)) ".log"))
+
+(defn generate-backup-filename [original]
+  (str original ".backup." (format-timestamp (now))))
 ```
 
 ## Next Steps
