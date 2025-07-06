@@ -21,6 +21,8 @@ A Lisp-like programming language implemented in Rust. Cortado features S-express
 - **Comprehensive test suite** - 390+ tests covering all language features
 - **Excellent performance** - Sub-second test execution
 
+## NOTE: This is still a work in progress: ymmv
+
 ## Quick Start
 
 ### Interactive REPL
