@@ -151,4 +151,23 @@ impl Env {
         // Fall back to regular namespace resolution
         self.get_with_namespaces(name)
     }
+
+    // Get all functions from a specific namespace
+    pub fn get_namespace_functions(&self, namespace: &str) -> Vec<(String, Value)> {
+        let mut functions = Vec::new();
+        let prefix = format!("{}/", namespace);
+        
+        for (key, value) in &self.data {
+            if key.starts_with(&prefix) {
+                functions.push((key.clone(), value.clone()));
+            }
+        }
+        
+        // Also check parent environments
+        if let Some(parent) = &self.parent {
+            functions.extend(parent.get_namespace_functions(namespace));
+        }
+        
+        functions
+    }
 }

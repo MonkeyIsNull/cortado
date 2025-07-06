@@ -52,3 +52,13 @@
 (defn partial1 [f arg1]
   (fn [x]
     (f arg1 x)))
+
+;; conj - add item to front of collection
+(defn conj [coll item]
+  (cons item coll))
+
+;; butlast - return all but the last element
+(defn butlast [coll]
+  (if (or (nil? coll) (= coll '()) (= (rest coll) '()))
+    '()
+    (cons (first coll) (butlast (rest coll)))))

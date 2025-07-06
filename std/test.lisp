@@ -13,6 +13,9 @@
 ;; Alias for compatibility
 (defn assert-eq [expected actual] (test-assert-eq expected actual))
 
+;; Assert not equal function
+(defn assert-not-eq [expected actual] (if (not (= expected actual)) (do (def *test-passes* (+ *test-passes* 1)) (print "  ✓ PASS:" expected "!=" actual) true) (do (def *test-fails* (+ *test-fails* 1)) (print "  ✗ FAIL: expected" expected "NOT to equal" actual) false)))
+
 ;; Test file runner
 (defn run-test-file [filepath] (do (print "\n📋 Testing:" filepath) (def *current-test-file* filepath) (load filepath)))
 
