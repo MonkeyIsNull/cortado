@@ -4,7 +4,7 @@
 
 set -e  # Exit on any error
 
-echo "🚀 CORTADO FAST TEST RUNNER"
+echo "CORTADO FAST TEST RUNNER"
 echo "Running curated list of fast, working tests..."
 echo
 
@@ -27,7 +27,7 @@ run_test() {
     local test_file=$1
     local test_name=$(basename "$test_file" .lisp)
     
-    echo -n "📋 Testing $test_name... "
+    echo -n "Testing $test_name... "
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
     
     # Run test with test framework loaded
@@ -88,7 +88,7 @@ run_test "test/manual-test.lisp"
 
 echo
 echo "======================================"
-echo -e "${BLUE}📊 TEST SUMMARY${NC}"
+echo -e "${BLUE} TEST SUMMARY${NC}"
 echo "======================================"
 echo -e "Total tests: $TOTAL_TESTS"
 echo -e "${GREEN}Passed: $PASSED_TESTS${NC}"
@@ -97,11 +97,11 @@ echo -e "${RED}Failed: $FAILED_TESTS${NC}"
 if [ $FAILED_TESTS -gt 0 ]; then
     echo -e "\n${RED}Failed tests:${NC}$FAILED_LIST"
     echo
-    echo -e "${YELLOW}💡 TIP: Failed tests may use slow 'load' instead of fast 'require'${NC}"
+    echo -e "${YELLOW} TIP: Failed tests may use slow 'load' instead of fast 'require'${NC}"
     exit 1
 else
-    echo -e "\n${GREEN}🎉 ALL TESTS PASSED!${NC}"
-    echo -e "${GREEN}✨ Module loading performance is working great!${NC}"
+    echo -e "\n${GREEN} ALL TESTS PASSED!${NC}"
+    echo -e "${GREEN} Module loading performance is working great!${NC}"
     exit 0
 fi
 

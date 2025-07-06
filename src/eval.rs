@@ -917,6 +917,23 @@ pub fn create_default_env() -> Env {
         })),
     );
 
+    // Add empty? function
+    env.set(
+        "empty?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("empty? requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::List(list) => Ok(Value::Bool(list.is_empty())),
+                Value::Vector(vec) => Ok(Value::Bool(vec.is_empty())),
+                Value::Str(s) => Ok(Value::Bool(s.is_empty())),
+                Value::Nil => Ok(Value::Bool(true)),
+                _ => Ok(Value::Bool(false))
+            }
+        })),
+    );
+
     // Time functions
     env.set(
         "now".to_string(),
@@ -1864,6 +1881,20 @@ pub fn create_default_env() -> Env {
             match &args[0] {
                 Value::Number(n) => Ok(Value::Bool(*n < 0.0)),
                 _ => Err("negative? requires a number".to_string())
+            }
+        })),
+    );
+
+    // Add positive? function
+    env.set(
+        "positive?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("positive? requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Number(n) => Ok(Value::Bool(*n > 0.0)),
+                _ => Err("positive? requires a number".to_string())
             }
         })),
     );
