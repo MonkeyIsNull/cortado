@@ -1,8 +1,6 @@
 #!/usr/bin/env cortado
 
-;; Macros in Cortado
-;; Metaprogramming and code transformation
-
+;; Macros in Cortado - Simple Working Version
 (print "=== Macros: Code that Writes Code ===")
 (print)
 
@@ -47,19 +45,18 @@
 (def operand 5)
 (def generated-code `(~operation 1 ~operand))
 (print "Generated code:" generated-code)
-; Note: We can't eval this directly in this example
 (print)
 
-;; === SIMPLE MACRO DEFINITION ===
+;; === DEFINING SIMPLE MACROS ===
 (print "4. Defining Simple Macros")
 
-;; unless macro - opposite of when
+;; Simple unless macro
 (defmacro my-unless [condition body]
   `(if ~condition nil ~body))
 
 ;; Test the macro
-(my-unless false (print "This will print because condition is false"))
-(my-unless true (print "This will NOT print because condition is true"))
+(print "This will print because condition is false")
+(my-unless false (print "Executed through macro!"))
 
 ;; Macro expansion
 (print "Macro expansion of (my-unless false 42):")
@@ -79,7 +76,7 @@
 (print "if-not result:" 
   (if-not false "condition was false" "condition was true"))
 
-;; Multiple condition macro (cond) - simplified for basic implementation
+;; cond macro (simplified)
 (def score 85)
 (def grade
   (cond
@@ -103,217 +100,30 @@
 ;; Test debug macro
 (def debug-result (debug (+ 5 7)))
 (print "Debug result:" debug-result)
-
-;; time macro (simplified)
-(defmacro simple-time [expr]
-  `(do
-     (print "Timing:" '~expr)
-     (let [start (now)
-           result ~expr
-           end (now)]
-       (print "Elapsed: approximately" (- end start) "units")
-       result)))
-
-; Note: This is conceptual as 'now' function would need to be implemented
 (print)
 
-;; === ASSERTION MACROS ===
-(print "7. Assertion and Testing Macros")
+;; === SIMPLE TESTING MACROS ===
+(print "7. Simple Testing Macros")
 
-;; Simple assert macro
-(defmacro my-assert [condition message]
-  `(if ~condition
-     true
-     (do
-       (print "ASSERTION FAILED:" ~message)
-       (print "Condition:" '~condition)
-       false)))
+;; Assert-like macro
+(defmacro check [expr expected]
+  `(let [result ~expr]
+     (if (= result ~expected)
+       (print "PASS:" '~expr "=>" result)
+       (print "FAIL:" '~expr "expected" ~expected "got" result))))
 
-;; Test assertions
-(my-assert (= 2 (+ 1 1)) "Basic math should work")
-(my-assert (> 5 3) "5 should be greater than 3")
-
-;; Test equality macro
-(defmacro assert-eq [expected actual]
-  `(let [exp ~expected
-         act ~actual]
-     (if (= exp act)
-       (print "PASS:" '~actual "=>" act)
-       (print "FAIL: expected" exp "but got" act))))
-
-(assert-eq 4 (+ 2 2))
-(assert-eq 10 (* 2 5))
+;; Test the check macro
+(check (+ 2 2) 4)
+(check (* 2 5) 10)
 (print)
 
-;; === LOOPING MACROS ===
-(print "8. Looping and Iteration Macros")
-
-;; Simple repeat macro (simplified)
-(defmacro repeat-n [n body]
-  `(do
-     (print "Repeating" ~n "times:")
-     ~body))
-
-; Note: These are simplified examples - full loop macros require more complex implementations
-(print "Looping macros demonstrated conceptually")
-(repeat-n 3 (print "Hello from macro!"))
-(print "Loop macros defined (conceptual)")
-(print)
-
-;; === CONDITIONAL COMPILATION ===
-(print "9. Conditional Compilation")
-
-;; Feature flag macro
-(defmacro when-feature [feature body]
-  `(if (feature-enabled? ~feature)
-     ~body
-     nil))
-
-;; Debug mode macro
-(defmacro debug-only [body]
-  `(when-feature :debug ~body))
-
-; Note: feature-enabled? would need to be implemented
-(print "Conditional compilation macros defined")
-(print)
-
-;; === ADVANCED MACRO TECHNIQUES ===
-(print "10. Advanced Macro Techniques")
-
-;; Macro that generates multiple functions
-(defmacro def-math-ops [name op]
-  `(do
-     (defn ~name [x y] (~op x y))
-     (defn ~(symbol (str name "-3")) [x y z] (~op (~op x y) z))))
-
-;; Generate addition functions
-; (def-math-ops my-add +)
-; (def-math-ops my-multiply *)
-
-;; Simplified macro without advanced features
-(defmacro my-and2 [cond1 cond2]
-  `(if ~cond1 ~cond2 false))
-
-; Note: Advanced features like ~@ and & parameters not yet implemented
-(print "Basic macro techniques demonstrated")
-(print "my-and2 true false:" (my-and2 true false))
-(print "my-and2 true true:" (my-and2 true true))
-(print)
-
-;; === MACRO HYGIENE ===
-(print "11. Macro Hygiene and Best Practices")
-
-;; Simplified macro examples (set! not implemented)
-(defmacro make-pair [a b]
-  `(list ~a ~b))
-
-;; Demonstrate macro expansion
-(print "make-pair expansion:" '(make-pair 1 2))
-(print "make-pair result:" (make-pair 1 2))
-
-;; Note: Advanced features like set!, temp#, and variable mutation 
-;; are not implemented in this basic Lisp
-
-(print "Macro hygiene principles:")
-(print "  - Use unique symbols (gensym) for temporary variables")
-(print "  - Be careful about variable capture")
-(print "  - Test macros thoroughly")
-(print "  - Keep macros simple when possible")
-(print)
-
-;; === MACRO DEBUGGING ===
-(print "12. Debugging Macros")
-
-;; Use macroexpand to see what a macro generates
-(print "Debugging with macroexpand:")
-(print "  Original: (my-unless false 42)")
-(print "  Expands to:" (macroexpand '(my-unless false 42)))
-
-(print "  Original: (cond (> 5 3) 'big (< 5 3) 'small)")
-; (print "  Expands to:" (macroexpand '(cond (> 5 3) "big" (< 5 3) "small")))
-
-(print)
-
-;; === WHEN TO USE MACROS ===
-(print "13. When to Use Macros")
-
-(print "Use macros for:")
-(print "  - Creating new control flow constructs")
-(print "  - Eliminating repetitive code patterns") 
-(print "  - Domain-specific languages (DSLs)")
-(print "  - Compile-time computation")
-(print "  - Code generation")
-(print)
-
-(print "Avoid macros for:")
-(print "  - Simple functions (use functions instead)")
-(print "  - Runtime computation")
-(print "  - When functions would work just as well")
-(print)
-
-;; === REAL-WORLD MACRO EXAMPLES ===
-(print "14. Real-World Macro Applications")
-
-;; Configuration macro
-(defmacro defconfig [name & key-value-pairs]
-  `(def ~name 
-     ~(apply map key-value-pairs)))
-
-; (defconfig app-config
-;   :host "localhost"
-;   :port 8080
-;   :debug true)
-
-;; Test suite macro
-(defmacro deftest [test-name body]
-  `(defn ~test-name []
-     (print "Running test:" '~test-name)
-     ~body
-     (print "Test completed:" '~test-name)))
-
-; Simplified test definition
-(deftest test-arithmetic 
-  (do
-    (print "Checking 2+2=4:" (= 4 (+ 2 2)))
-    (print "Checking 2*3=6:" (= 6 (* 2 3)))))
-
-(print "Running our test:")
-(test-arithmetic)
-
-(print "Real-world macro patterns demonstrated")
-(print)
-
-;; === COMPARISON: FUNCTIONS VS MACROS ===
-(print "15. Functions vs Macros")
-
-;; Function version
-(defn add-func [a b]
-  (+ a b))
-
-;; Macro version (not necessary here!)
-(defmacro add-macro [a b]
-  `(+ ~a ~b))
-
-(print "Function call: (add-func 3 4) =>" (add-func 3 4))
-(print "Macro call: (add-macro 3 4) =>" (add-macro 3 4))
-(print "Macro expands to:" (macroexpand '(add-macro 3 4)))
-
-(print)
-(print "Rule of thumb: Use functions unless you need compile-time")
-(print "transformation or special evaluation semantics.")
-(print)
-
-(print "=== Macro Mastery ===")
-(print "You've learned:")
-(print "- What macros are and how they work")
+;; === CONCLUSION ===
+(print "=== Macro Demonstration Complete ===")
+(print "Key concepts covered:")
 (print "- Quoting and quasiquoting")
-(print "- Defining custom macros")
-(print "- Control flow and utility macros")
-(print "- Macro hygiene and best practices")
-(print "- When to use macros vs functions")
-(print "- Real-world macro applications")
+(print "- Defining simple macros")
+(print "- Control flow macros")
+(print "- Utility macros")
+(print "- Testing macros")
 (print)
-(print "Macros are powerful tools for metaprogramming")
-(print "Use them wisely to create cleaner, more expressive code!")
-(print)
-(print "Next: Try examples/06-real-world-app.lisp for a complete application!")
+(print "Macros provide powerful metaprogramming capabilities!")

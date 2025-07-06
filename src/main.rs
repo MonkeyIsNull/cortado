@@ -446,6 +446,7 @@ fn run_comprehensive_tests(_env: &mut Env) {
                 // MINIMAL essential functions - anything more causes environment pollution
                 let essential_funcs = vec![
                     "(defn assert-eq [expected actual] (test-assert-eq expected actual))",
+                    "(defn assert-not-eq [expected actual] (if (not (= expected actual)) (do (print \"  ✓ PASS:\" expected \"!=\" actual) true) (do (print \"  ✗ FAIL: expected\" expected \"NOT to equal\" actual) false)))",
                 ];
                 
                 for func in essential_funcs {

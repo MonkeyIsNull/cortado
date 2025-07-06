@@ -917,6 +917,23 @@ pub fn create_default_env() -> Env {
         })),
     );
 
+    // Add empty? function
+    env.set(
+        "empty?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("empty? requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::List(list) => Ok(Value::Bool(list.is_empty())),
+                Value::Vector(vec) => Ok(Value::Bool(vec.is_empty())),
+                Value::Str(s) => Ok(Value::Bool(s.is_empty())),
+                Value::Nil => Ok(Value::Bool(true)),
+                _ => Ok(Value::Bool(false))
+            }
+        })),
+    );
+
     // Time functions
     env.set(
         "now".to_string(),
@@ -1868,6 +1885,20 @@ pub fn create_default_env() -> Env {
         })),
     );
 
+    // Add positive? function
+    env.set(
+        "positive?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("positive? requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Number(n) => Ok(Value::Bool(*n > 0.0)),
+                _ => Err("positive? requires a number".to_string())
+            }
+        })),
+    );
+
     // Min and max functions
     env.set(
         "min".to_string(),
@@ -2200,6 +2231,40 @@ pub fn create_default_env() -> Env {
         })),
     );
 
+    // count function - get length of sequences
+    env.set(
+        "count".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("count requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::List(items) => Ok(Value::Number(items.len() as f64)),
+                Value::Vector(items) => Ok(Value::Number(items.len() as f64)),
+                Value::Str(s) => Ok(Value::Number(s.len() as f64)),
+                Value::Nil => Ok(Value::Number(0.0)),
+                _ => Err("count requires a sequence (list, vector, or string)".to_string()),
+            }
+        })),
+    );
+
+    // length function - alias for count
+    env.set(
+        "length".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("length requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::List(items) => Ok(Value::Number(items.len() as f64)),
+                Value::Vector(items) => Ok(Value::Number(items.len() as f64)),
+                Value::Str(s) => Ok(Value::Number(s.len() as f64)),
+                Value::Nil => Ok(Value::Number(0.0)),
+                _ => Err("length requires a sequence (list, vector, or string)".to_string()),
+            }
+        })),
+    );
+
     env
 }
 
@@ -2287,7 +2352,7 @@ fn load_namespace(ns_name: &str, env: &mut Env) -> Result<Value, String> {
 }
 
 // Optimized loading function - minimal overhead
-fn load_form(form: &Value, env: &mut Env) -> Result<Value, String> {
+fn _load_form(form: &Value, env: &mut Env) -> Result<Value, String> {
     match form {
         Value::List(list) if !list.is_empty() => {
             match &list[0] {
@@ -2401,7 +2466,17 @@ fn load_form_hybrid(form: &Value, env: &mut Env) -> Result<Value, String> {
         Value::List(list) if !list.is_empty() => {
             match &list[0] {
                 Value::Symbol(name) => match name.as_str() {
-                    "ns" => Ok(Value::Nil),
+                    "ns" => {
+                        if list.len() != 2 {
+                            return Err("ns requires exactly 1 argument".to_string());
+                        }
+                        if let Value::Symbol(ns_name) = &list[1] {
+                            env.set_namespace(ns_name.clone());
+                            Ok(Value::Nil)
+                        } else {
+                            Err("ns argument must be a symbol".to_string())
+                        }
+                    }
                     "defn" => {
                         if list.len() != 4 {
                             return Err("defn requires exactly 3 arguments".to_string());
@@ -2432,6 +2507,20 @@ fn load_form_hybrid(form: &Value, env: &mut Env) -> Result<Value, String> {
                                     if let Some(func_val) = env.get(func_name) {
                                         minimal_env.set(func_name.to_string(), func_val);
                                     }
+                                }
+                                
+                                // Copy functions from current namespace to allow intra-namespace calls
+                                let current_ns = env.get_namespace();
+                                minimal_env.set_namespace(current_ns.to_string());
+                                
+                                // Copy all namespaced functions that start with current namespace
+                                for (key, value) in env.get_namespace_functions(current_ns) {
+                                    // Extract the unqualified name for local access
+                                    if let Some(local_name) = key.strip_prefix(&format!("{}/", current_ns)) {
+                                        minimal_env.set(local_name.to_string(), value.clone());
+                                    }
+                                    // Also keep the fully qualified name
+                                    minimal_env.set(key.clone(), value.clone());
                                 }
                                 
                                 let func = Value::Function(Function::UserDefined {
