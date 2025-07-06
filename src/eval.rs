@@ -1854,6 +1854,20 @@ pub fn create_default_env() -> Env {
         })),
     );
 
+    // Add negative? as alias for neg?
+    env.set(
+        "negative?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 1 {
+                return Err("negative? requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                Value::Number(n) => Ok(Value::Bool(*n < 0.0)),
+                _ => Err("negative? requires a number".to_string())
+            }
+        })),
+    );
+
     // Min and max functions
     env.set(
         "min".to_string(),

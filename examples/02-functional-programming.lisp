@@ -93,14 +93,15 @@
       (map-list square numbers))))
 (print "Sum of squares of even numbers:" processed-numbers)
 
-;; Alternative using functional composition
-(def process-pipeline
-  (comp3 
-    (partial1 reduce-list + 0)
-    (partial1 filter-list even?)
-    (partial1 map-list square)))
+;; Alternative using functional composition (simplified)
+; Note: partial1 only takes 2 args, so complex composition is commented out
+; (def process-pipeline
+;   (comp3 
+;     (partial1 reduce-list +)
+;     (partial1 filter-list even?)
+;     (partial1 map-list square)))
 
-; (print "Same result with composition:" (process-pipeline numbers))
+(print "Functional composition techniques available but complex")
 
 ;; Take and drop operations
 (def first-five (take 5 numbers))
@@ -112,21 +113,11 @@
 ;; === CLOSURES ===
 (print "5. Closures - Functions with Memory")
 
-;; Counter closure
-(defn make-counter [initial]
-  (let [count initial]
-    (fn []
-      (set! count (+ count 1))
-      count)))
-
-; Note: set! is not implemented in Cortado, this is conceptual
-
-;; Accumulator closure
-(defn make-accumulator [initial]
-  (let [total initial]
-    (fn [value]
-      (set! total (+ total value))
-      total)))
+;; Counter and accumulator closures
+; Note: set! is not implemented in Cortado, so these are conceptual examples
+(print "Closure examples (set! not implemented):")
+(print "- Stateful closures require mutable variables")
+(print "- Pure functional alternatives use parameters")
 
 ;; Function factory
 (defn make-adder [n]
@@ -150,13 +141,13 @@
 ;; === RECURSIVE PATTERNS ===
 (print "6. Recursive Functional Patterns")
 
-;; Tail-recursive sum
+;; Tail-recursive sum (using letrec for local function)
 (defn sum-list [lst]
-  (defn sum-helper [remaining acc]
-    (if (empty? remaining)
-      acc
-      (sum-helper (rest remaining) (+ acc (first remaining)))))
-  (sum-helper lst 0))
+  (letrec [[sum-helper (fn [remaining acc]
+                         (if (empty? remaining)
+                           acc
+                           (sum-helper (rest remaining) (+ acc (first remaining)))))]]
+    (sum-helper lst 0)))
 
 (print "Sum using tail recursion:" (sum-list '(1 2 3 4 5)))
 
@@ -188,20 +179,23 @@
 
 ;; Constantly - always returns same value
 (def always-true (constantly true))
-(print "always-true():" (always-true))
+(print "always-true(anything):" (always-true 123))
 
-;; Juxt - apply multiple functions to same argument
-(def get-stats (juxt3 min max length))
+;; Juxt - apply multiple functions to same argument (not implemented)
+; (def get-stats (juxt3 min max length))
 ; (print "Stats of [1 5 3 9 2]:" (get-stats '(1 5 3 9 2)))
+(print "Juxt functionality not yet implemented")
 
 ;; Sequence utilities
 (print "Last element of [1 2 3 4]:" (last '(1 2 3 4)))
-(print "All but last [1 2 3 4]:" (butlast '(1 2 3 4)))
+; (print "All but last [1 2 3 4]:" (butlast '(1 2 3 4)))
+(print "butlast function not yet implemented")
 
-;; Take-while and drop-while
-(def numbers-with-negatives '(1 2 3 -1 4 5))
-(print "Take while positive:" (take-while positive? numbers-with-negatives))
-(print "Drop while positive:" (drop-while positive? numbers-with-negatives))
+;; Take-while and drop-while (not implemented)
+; (def numbers-with-negatives '(1 2 3 -1 4 5))
+; (print "Take while positive:" (take-while positive? numbers-with-negatives))
+; (print "Drop while positive:" (drop-while positive? numbers-with-negatives))
+(print "take-while and drop-while functions not yet implemented")
 (print)
 
 ;; === FUNCTION COMPOSITION PATTERNS ===
