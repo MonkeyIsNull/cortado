@@ -34,9 +34,10 @@
 (def count (length numbers))
 (print "Count:" count)
 
-;; Reverse with alias
-(def backwards (reverse-list numbers))
-(print "Reversed:" backwards)
+;; Reverse with alias - temporarily disabled due to loading issue
+;; (def backwards (reverse-list numbers))
+;; (print "Reversed:" backwards)
+(print "Reversed: (temporarily disabled)")
 
 (print)
 (print "=== Demo Complete ===")

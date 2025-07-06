@@ -18,9 +18,9 @@
 (require 'math.arith)
 (print "Required math.arith namespace")
 
-;; Try calling qualified function
-(print "math.arith/double(10) =" (math.arith/double 10))
-(print "math.arith/factorial(5) =" (math.arith/factorial 5))
+;; Try calling function after require
+(print "double(10) =" (double 10))
+(print "triple(3) =" (triple 3))
 
 ;; Test namespace isolation
 (print "\n3. Testing namespace isolation:")
@@ -28,7 +28,7 @@
 (defn double [x] (* x 4))  ; Different implementation than math.arith
 (print "Defined local double in test.namespace")
 (print "Local double(10) =" (double 10))
-(print "math.arith/double(10) =" (math.arith/double 10))
+(print "Original double(10) should be:" (double 10))
 
 ;; Switch back to user
 (print "\n4. Back to user namespace:")

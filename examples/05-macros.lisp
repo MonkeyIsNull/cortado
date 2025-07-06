@@ -71,8 +71,9 @@
 
 ;; when-not macro
 (when-not false
-  (print "when-not: This prints when condition is false")
-  42)
+  (do
+    (print "when-not: This prints when condition is false")
+    42))
 
 ;; if-not macro  
 (print "if-not result:" 

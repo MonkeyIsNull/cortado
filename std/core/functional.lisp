@@ -14,6 +14,11 @@
   (fn [x]
     (f (g x))))
 
+;; Function composition for 3 functions
+(defn comp3 [f g h]
+  (fn [x]
+    (f (g (h x)))))
+
 ;; Complement - create function that returns opposite boolean result
 (defn complement [pred]
   (fn [x]
