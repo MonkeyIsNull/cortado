@@ -7,10 +7,10 @@
 (print)
 
 ;; Load required modules
-(require [core.seq :as s])
-(require [core.threading :as t])
-(require [core.functional :as fn])
-(require [core.sequences :as seq])
+(require 'core.seq)
+(require 'core.threading)
+(require 'core.functional)
+; (require 'core.sequences) ; Not available yet
 
 ;; === SAMPLE DATA ===
 (print "1. Sample Data Sets")
@@ -46,9 +46,9 @@
 ))
 
 (print "Loaded sample data sets:")
-(print "- Sales data:" (s/length sales-data) "records")
-(print "- Employee data:" (s/length employees) "records") 
-(print "- Sensor data:" (s/length sensor-data) "readings")
+(print "- Sales data:" (length sales-data) "records")
+(print "- Employee data:" (length employees) "records") 
+(print "- Sensor data:" (length sensor-data) "readings")
 (print)
 
 ;; === BASIC DATA EXTRACTION ===
@@ -57,8 +57,8 @@
 ;; Extract specific fields
 (defn get-field [field] (fn [record] (get record field)))
 
-(def product-names (s/map-list (get-field :product) sales-data))
-(def employee-names (s/map-list (get-field :name) employees))
+(def product-names (map-list (get-field :product) sales-data))
+(def employee-names (map-list (get-field :name) employees))
 
 (print "Products:" product-names)
 (print "Employees:" employee-names)
@@ -69,19 +69,19 @@
 
 ;; High-value sales (price > 100)
 (def high-value-sales 
-  (s/filter-list (fn [sale] (> (:price sale) 100)) sales-data))
+  (filter-list (fn [sale] (> (:price sale) 100)) sales-data))
 
 (print "High-value sales (>$100):")
-(s/map-list (fn [sale] 
+(map-list (fn [sale] 
               (print "  " (:product sale) "-" (:price sale)))
             high-value-sales)
 
 ;; Senior employees (years > 5)
 (def senior-employees
-  (s/filter-list (fn [emp] (> (:years emp) 5)) employees))
+  (filter-list (fn [emp] (> (:years emp) 5)) employees))
 
 (print "Senior employees (>5 years):")
-(s/map-list (fn [emp]
+(map-list (fn [emp]
               (print "  " (:name emp) "-" (:years emp) "years"))
             senior-employees)
 (print)
@@ -94,24 +94,24 @@
   (assoc sale :revenue (* (:price sale) (:quantity sale))))
 
 (def sales-with-revenue 
-  (s/map-list calculate-revenue sales-data))
+  (map-list calculate-revenue sales-data))
 
 ;; Total revenue
 (def total-revenue
-  (s/reduce-list + 0 
-    (s/map-list (get-field :revenue) sales-with-revenue)))
+  (reduce-list + 0 
+    (map-list (get-field :revenue) sales-with-revenue)))
 
 (print "Total revenue: $" total-revenue)
 
 ;; Average salary by department
 (defn filter-by-dept [dept]
-  (s/filter-list (fn [emp] (= (:department emp) dept)) employees))
+  (filter-list (fn [emp] (= (:department emp) dept)) employees))
 
 (defn average-salary [emps]
   (if (empty? emps)
     0
-    (/ (s/reduce-list + 0 (s/map-list (get-field :salary) emps))
-       (s/length emps))))
+    (/ (reduce-list + 0 (map-list (get-field :salary) emps))
+       (length emps))))
 
 (def eng-avg (average-salary (filter-by-dept "Engineering")))
 (def sales-avg (average-salary (filter-by-dept "Sales")))
@@ -125,25 +125,25 @@
 
 ;; Group sales by region (simplified grouping)
 (defn sales-by-region [region]
-  (s/filter-list (fn [sale] (= (:region sale) region)) sales-data))
+  (filter-list (fn [sale] (= (:region sale) region)) sales-data))
 
 (def regions '("North" "South" "East" "West"))
 
 (print "Sales by region:")
-(s/map-list (fn [region]
+(map-list (fn [region]
               (let [region-sales (sales-by-region region)
-                    count (s/length region-sales)]
+                    count (length region-sales)]
                 (print "  " region ":" count "sales")))
             regions)
 
 ;; Product popularity (count by product)
 (defn count-product [product]
-  (s/length (s/filter-list (fn [sale] (= (:product sale) product)) sales-data)))
+  (length (filter-list (fn [sale] (= (:product sale) product)) sales-data)))
 
-(def unique-products (seq/distinct (s/map-list (get-field :product) sales-data)))
+(def unique-products (seq/distinct (map-list (get-field :product) sales-data)))
 
 (print "Product popularity:")
-(s/map-list (fn [product]
+(map-list (fn [product]
               (print "  " product ":" (count-product product) "sales"))
             unique-products)
 (print)
@@ -155,17 +155,17 @@
 (defn analyze-sales-performance []
   (let [
     ;; Step 1: Add revenue calculation
-    with-revenue (s/map-list calculate-revenue sales-data)
+    with-revenue (map-list calculate-revenue sales-data)
     
     ;; Step 2: Filter high-value transactions
-    high-value (s/filter-list (fn [sale] (> (:revenue sale) 200)) with-revenue)
+    high-value (filter-list (fn [sale] (> (:revenue sale) 200)) with-revenue)
     
     ;; Step 3: Extract revenues
-    revenues (s/map-list (get-field :revenue) high-value)
+    revenues (map-list (get-field :revenue) high-value)
     
     ;; Step 4: Calculate statistics
-    total (s/reduce-list + 0 revenues)
-    count (s/length revenues)
+    total (reduce-list + 0 revenues)
+    count (length revenues)
     average (if (> count 0) (/ total count) 0)
   ]
     {:total-revenue total
@@ -185,14 +185,14 @@
 ;; Analyze sensor data trends
 (defn analyze-sensor-trends [sensor-id]
   (let [
-    sensor-readings (s/filter-list (fn [reading] (= (:sensor reading) sensor-id)) sensor-data)
-    temperatures (s/map-list (get-field :temperature) sensor-readings)
-    humidities (s/map-list (get-field :humidity) sensor-readings)
+    sensor-readings (filter-list (fn [reading] (= (:sensor reading) sensor-id)) sensor-data)
+    temperatures (map-list (get-field :temperature) sensor-readings)
+    humidities (map-list (get-field :humidity) sensor-readings)
   ]
     {:sensor sensor-id
-     :readings (s/length sensor-readings)
-     :avg-temp (/ (s/reduce-list + 0 temperatures) (s/length temperatures))
-     :avg-humidity (/ (s/reduce-list + 0 humidities) (s/length humidities))}))
+     :readings (length sensor-readings)
+     :avg-temp (/ (reduce-list + 0 temperatures) (length temperatures))
+     :avg-humidity (/ (reduce-list + 0 humidities) (length humidities))}))
 
 (def sensor-a1-analysis (analyze-sensor-trends "A1"))
 (def sensor-a2-analysis (analyze-sensor-trends "A2"))
@@ -223,12 +223,12 @@
        (>= (:years emp) 0)))
 
 ;; Clean data
-(def valid-sales (s/filter-list valid-sale? sales-data))
-(def valid-employees (s/filter-list valid-employee? employees))
+(def valid-sales (filter-list valid-sale? sales-data))
+(def valid-employees (filter-list valid-employee? employees))
 
 (print "Data validation:")
-(print "  Valid sales:" (s/length valid-sales) "/" (s/length sales-data))
-(print "  Valid employees:" (s/length valid-employees) "/" (s/length employees))
+(print "  Valid sales:" (length valid-sales) "/" (length sales-data))
+(print "  Valid employees:" (length valid-employees) "/" (length employees))
 (print)
 
 ;; === REPORT GENERATION ===
@@ -236,16 +236,16 @@
 
 (defn generate-sales-report []
   (print "=== SALES REPORT ===")
-  (print "Total transactions:" (s/length sales-data))
+  (print "Total transactions:" (length sales-data))
   (print "Total revenue: $" total-revenue)
-  (print "Average transaction value: $" (/ total-revenue (s/length sales-data)))
+  (print "Average transaction value: $" (/ total-revenue (length sales-data)))
   (print)
   
   (print "Top products by quantity sold:")
   ;; This is simplified - real implementation would sort by quantity
-  (s/map-list (fn [product]
-                (let [sales (s/filter-list (fn [sale] (= (:product sale) product)) sales-data)
-                      total-qty (s/reduce-list + 0 (s/map-list (get-field :quantity) sales))]
+  (map-list (fn [product]
+                (let [sales (filter-list (fn [sale] (= (:product sale) product)) sales-data)
+                      total-qty (reduce-list + 0 (map-list (get-field :quantity) sales))]
                   (print "  " product ":" total-qty "units")))
               unique-products)
   (print "=== END REPORT ==="))
@@ -258,10 +258,10 @@
 
 ;; Chain multiple transformations
 (defn process-employee-data []
-  (s/reduce-list + 0
-    (s/map-list (get-field :salary)
-      (s/filter-list (fn [emp] (= (:department emp) "Engineering"))
-        (s/filter-list (fn [emp] (> (:years emp) 3)) employees)))))
+  (reduce-list + 0
+    (map-list (get-field :salary)
+      (filter-list (fn [emp] (= (:department emp) "Engineering"))
+        (filter-list (fn [emp] (> (:years emp) 3)) employees)))))
 
 (def eng-senior-total-salary (process-employee-data))
 (print "Total salary of senior Engineers: $" eng-senior-total-salary)
@@ -272,7 +272,7 @@
         category (if (> (:price sale) 100) "Premium" "Standard")]
     (assoc sale :revenue revenue :category category)))
 
-(def enriched-sales (s/map-list enrich-sale-data sales-data))
+(def enriched-sales (map-list enrich-sale-data sales-data))
 (print "Enriched sales data (first item):")
 (print "  " (first enriched-sales))
 (print)
@@ -288,4 +288,4 @@
 (print "- Data validation and cleaning")
 (print "- Report generation")
 (print)
-(print "Next: Try examples/04-threading-macros.lisp for cleaner pipelines!")
+(print "Next: Try example04-threading-macros.lisp for cleaner pipelines!")

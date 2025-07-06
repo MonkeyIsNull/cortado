@@ -7,9 +7,9 @@
 (print)
 
 ;; Load required modules
-(require [core.threading :as t])
-(require [core.seq :as s])
-(require [core.functional :as fn])
+(require 'core.threading)
+(require 'core.seq)
+(require 'core.functional)
 
 ;; === THE PROBLEM: NESTED FUNCTION CALLS ===
 (print "1. The Problem with Nested Calls")
@@ -35,7 +35,7 @@
 
 ;; Clean, readable version using thread-first
 (def clean-calculation
-  (t/->3 100
+  (->3 100
          (/ 4)      ; 100 / 4 = 25
          (- 5)      ; 25 - 5 = 20  
          (* 3)))    ; 20 * 3 = 60
@@ -45,7 +45,7 @@
 
 ;; String processing with thread-first
 (def processed-string
-  (t/->3 "hello"
+  (->3 "hello"
          (str " world")     ; "hello" + " world" = "hello world"
          (str "!")          ; "hello world" + "!" = "hello world!"
          upper-case))       ; upper-case("hello world!")
@@ -59,7 +59,7 @@
 
 ;; Mathematical operations where order matters
 (def math-pipeline
-  (t/->>3 10
+  (->>3 10
           (* 2)    ; (* 2 10) = 20
           (+ 5)    ; (+ 5 20) = 25  
           (/ 100))) ; (/ 100 25) = 4
@@ -71,18 +71,18 @@
 
 ;; Without threading - nested and hard to read
 (def nested-result
-  (s/reduce-list +
+  (reduce-list +
     0
-    (s/filter-list even?
-      (s/map-list (fn [x] (* x x)) numbers))))
+    (filter-list even?
+      (map-list (fn [x] (* x x)) numbers))))
 
 (print "Nested list processing result:" nested-result)
 
 ;; With thread-last - reads like a pipeline!
 ;; Note: This would be ideal, but we're limited to 2-3 steps in current implementation
-(def pipeline-step1 (s/map-list (fn [x] (* x x)) numbers))      ; Square each
-(def pipeline-step2 (s/filter-list even? pipeline-step1))       ; Keep evens
-(def pipeline-step3 (s/reduce-list + 0 pipeline-step2))         ; Sum them
+(def pipeline-step1 (map-list (fn [x] (* x x)) numbers))      ; Square each
+(def pipeline-step2 (filter-list even? pipeline-step1))       ; Keep evens
+(def pipeline-step3 (reduce-list + 0 pipeline-step2))         ; Sum them
 
 (print "Pipeline result:" pipeline-step3)
 (print "Results match:" (= nested-result pipeline-step3))
@@ -111,21 +111,21 @@
 
 ;; Step-by-step approach (what the threading macro does internally)
 (print "Processing pipeline:")
-(def squared-data (s/map-list (fn [x] (* x x)) raw-data))
+(def squared-data (map-list (fn [x] (* x x)) raw-data))
 (print "  1. Squared:" squared-data)
 
-(def filtered-data (s/filter-list (fn [x] (> x 20)) squared-data))
+(def filtered-data (filter-list (fn [x] (> x 20)) squared-data))
 (print "  2. Filtered (>20):" filtered-data)
 
-(def summed-data (s/reduce-list + 0 filtered-data))
+(def summed-data (reduce-list + 0 filtered-data))
 (print "  3. Summed:" summed-data)
 
 ;; Using thread-last for the same pipeline (conceptual)
 ;; (def threaded-result
-;;   (t/->>3 raw-data
-;;           (s/map-list (fn [x] (* x x)))
-;;           (s/filter-list (fn [x] (> x 20)))
-;;           (s/reduce-list + 0)))
+;;   (->>3 raw-data
+;;           (map-list (fn [x] (* x x)))
+;;           (filter-list (fn [x] (> x 20)))
+;;           (reduce-list + 0)))
 
 (print)
 
@@ -166,7 +166,7 @@
 
 ;; With thread-first macro (clean and readable)
 (def user-threaded
-  (t/->3 {}
+  (->3 {}
          (add-name "Carol")
          (add-age 28)
          (add-email "carol@example.com")))
@@ -193,7 +193,7 @@
 (def test-values '(-5 3 4 7))
 
 (print "Conditional processing results:")
-(s/map-list (fn [x]
+(map-list (fn [x]
               (let [step1 (process-if-positive x)
                     step2 (process-if-even step1)]
                 (print "  " x "->" step1 "->" step2)))
@@ -210,7 +210,7 @@
 
 ;; Pipeline with debugging
 (def debugged-result
-  (t/->3 10
+  (->3 10
          (debug "start")
          (* 3)
          (debug "after multiply")))
@@ -234,13 +234,13 @@
   (assoc sale :revenue (* (:price sale) (:quantity sale))))
 
 ;; Analysis pipeline
-(def analysis-step1 (s/map-list add-revenue sales))
+(def analysis-step1 (map-list add-revenue sales))
 (print "1. With revenue:" analysis-step1)
 
-(def analysis-step2 (s/filter-list (fn [sale] (> (:revenue sale) 200)) analysis-step1))
+(def analysis-step2 (filter-list (fn [sale] (> (:revenue sale) 200)) analysis-step1))
 (print "2. High-value sales:" analysis-step2)
 
-(def total-high-value (s/reduce-list + 0 (s/map-list (fn [sale] (:revenue sale)) analysis-step2)))
+(def total-high-value (reduce-list + 0 (map-list (fn [sale] (:revenue sale)) analysis-step2)))
 (print "3. Total high-value revenue:" total-high-value)
 
 ;; Same analysis with threading (conceptual - would need longer threading macros)
@@ -263,14 +263,14 @@
 (print "11. Before and After Comparison")
 
 (print "BEFORE (nested, hard to read):")
-(print "(s/reduce-list + 0 (s/filter-list even? (s/map-list inc numbers)))")
+(print "(reduce-list + 0 (filter-list even? (map-list inc numbers)))")
 (print)
 
 (print "AFTER (threaded, easy to read):")
 (print "(->> numbers")
-(print "     (s/map-list inc)")
-(print "     (s/filter-list even?)")  
-(print "     (s/reduce-list + 0))")
+(print "     (map-list inc)")
+(print "     (filter-list even?)")  
+(print "     (reduce-list + 0))")
 (print)
 
 (print "=== Threading Macro Mastery ===")
@@ -285,4 +285,4 @@
 (print "Threading macros transform hard-to-read nested code")
 (print "into clear, linear pipelines that read like prose!")
 (print)
-(print "Next: Try examples/05-macros.lisp for advanced metaprogramming!")
+(print "Next: Try example05-macros.lisp for advanced metaprogramming!")

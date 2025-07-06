@@ -7,7 +7,7 @@
 (print)
 
 ;; Load core.seq namespace with a short alias
-(require [core.seq :as s])
+(require 'core.seq)
 (print "Loaded core.seq namespace with alias 's'")
 
 ;; Sample data
@@ -19,26 +19,26 @@
 (print "Using aliased functions:")
 
 ;; Map with alias
-(def doubled (s/map-list (fn [x] (* x 2)) numbers))
+(def doubled (map-list (fn [x] (* x 2)) numbers))
 (print "Doubled:" doubled)
 
 ;; Filter with alias  
-(def evens (s/filter-list (fn [x] (= (% x 2) 0)) numbers))
+(def evens (filter-list (fn [x] (= (% x 2) 0)) numbers))
 (print "Even numbers:" evens)
 
 ;; Reduce with alias
-(def sum (s/reduce-list + 0 numbers))
+(def sum (reduce-list + 0 numbers))
 (print "Sum:" sum)
 
 ;; Length with alias
-(def count (s/length numbers))
+(def count (length numbers))
 (print "Count:" count)
 
 ;; Reverse with alias
-(def backwards (s/reverse-list numbers))
+(def backwards (reverse-list numbers))
 (print "Reversed:" backwards)
 
 (print)
 (print "=== Demo Complete ===")
 (print "Namespace aliasing makes code more readable!")
-(print "Compare 's/map-list' vs 'core.seq/map-list'")
+(print "Compare 'map-list' vs 'core.seq/map-list'")

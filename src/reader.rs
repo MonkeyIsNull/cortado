@@ -111,6 +111,17 @@ fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                     i += 1;
                 }
             }
+            '#' => {
+                // Handle shebang line
+                if i + 1 < chars.len() && chars[i + 1] == '!' {
+                    // Skip entire shebang line
+                    while i < chars.len() && chars[i] != '\n' {
+                        i += 1;
+                    }
+                } else {
+                    return Err(format!("Unexpected character: #"));
+                }
+            }
             _ => {
                 if chars[i].is_numeric() || (chars[i] == '-' && i + 1 < chars.len() && chars[i + 1].is_numeric()) {
                     let mut num_str = String::new();

@@ -65,7 +65,7 @@ fn load_file(path: &Path, env: &mut Env) -> Result<(), String> {
     
     for line in lines {
         let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with(';') {
+        if trimmed.is_empty() || trimmed.starts_with(';') || trimmed.starts_with("#!") {
             continue;
         }
         
@@ -593,6 +593,87 @@ fn run_script(filename: &str, verbose: bool) {
     }
 }
 
+fn run_examples() {
+    use std::time::Instant;
+    
+    let overall_start = Instant::now();
+    println!("CORTADO EXAMPLES TEST SUITE");
+    println!("===========================");
+    
+    let examples_dir = std::path::Path::new("examples");
+    let mut example_files = Vec::new();
+    
+    if let Ok(entries) = std::fs::read_dir(examples_dir) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.extension().map_or(false, |ext| ext == "lisp") {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        // Skip certain test files that aren't meant to be run directly
+                        if !name.starts_with("test-") && !name.contains("cortadorc") {
+                            example_files.push(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    example_files.sort();
+    
+    let mut total_examples = 0;
+    let mut passed_examples = 0;
+    let mut failed_examples = 0;
+    
+    for example_file in example_files {
+        total_examples += 1;
+        println!("\nRunning: {}", example_file);
+        
+        let start = Instant::now();
+        let example_path = format!("examples/{}", example_file);
+        
+        // Use load_file directly instead of trying to wrap in do
+        let mut env = create_default_env();
+        
+        // Pre-load commonly used standard library modules
+        let common_modules = vec!["core.seq", "core.functional", "core.threading", "core.control"];
+        for module in &common_modules {
+            // Try to load but don't fail if module doesn't exist
+            if let Ok(expr) = read(&format!("(require '{module})")) {
+                let _ = eval(&expr, &mut env);
+            }
+        }
+        
+        match load_file(std::path::Path::new(&example_path), &mut env) {
+            Ok(_) => {
+                let elapsed = start.elapsed();
+                println!("  PASSED ({:.2}s)", elapsed.as_secs_f64());
+                passed_examples += 1;
+            }
+            Err(e) => {
+                println!("  FAILED: {}", e);
+                failed_examples += 1;
+            }
+        }
+    }
+    
+    let overall_elapsed = overall_start.elapsed();
+    
+    println!("\n\nEXAMPLES TEST RESULTS");
+    println!("=====================");
+    println!("Total Examples: {}", total_examples);
+    println!("Passed: {}", passed_examples);
+    println!("Failed: {}", failed_examples);
+    println!("Total Time: {:.2}s", overall_elapsed.as_secs_f64());
+    
+    if failed_examples == 0 {
+        println!("\nALL EXAMPLES PASSED!");
+    } else {
+        println!("\nSOME EXAMPLES FAILED!");
+        std::process::exit(1);
+    }
+}
+
 fn run_eval_expression(expr: &str, verbose: bool) {
     let mut env = create_default_env();
     
@@ -633,7 +714,8 @@ fn print_usage() {
     println!();
     println!("COMMANDS:");
     println!("    demo                Run language demo");
-    println!("    test                Run test suite");
+    println!("    test                Run comprehensive test suite");
+    println!("    examples            Run all example programs");
     println!();
     println!("EXAMPLES:");
     println!("    cortado                     # Start REPL");
@@ -680,6 +762,10 @@ fn main() {
             }
             "test" => {
                 run_tests();
+                return;
+            }
+            "examples" => {
+                run_examples();
                 return;
             }
             arg if arg.starts_with('-') => {

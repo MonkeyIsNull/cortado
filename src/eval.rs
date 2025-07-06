@@ -3,7 +3,7 @@ use crate::value::{Value, Function, IOResource};
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
-use std::io::{BufRead, BufReader, BufWriter, Write, Read};
+use std::io::{BufRead, Write, Read};
 
 pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
     match expr {
@@ -47,6 +47,7 @@ pub fn eval(expr: &Value, env: &mut Env) -> Result<Value, String> {
                     "quasiquote" => eval_quasiquote(list, env),
                     "macroexpand" => eval_macroexpand(list, env),
                     "letrec" => eval_letrec(list, env),
+                    "let" => eval_let(list, env), // let handles Clojure-style flat vector syntax
                     "load" => eval_load(list, env),
                     "do" => eval_do(list, env),
                     "ns" => eval_ns(list, env),
@@ -282,6 +283,39 @@ fn eval_macroexpand(list: &[Value], env: &Env) -> Result<Value, String> {
     macroexpand(form, env)
 }
 
+fn eval_let(list: &[Value], env: &mut Env) -> Result<Value, String> {
+    if list.len() != 3 {
+        return Err("let requires exactly 2 arguments".to_string());
+    }
+
+    let bindings = match &list[1] {
+        Value::Vector(bindings) => bindings,
+        _ => return Err("let bindings must be a vector".to_string()),
+    };
+
+    if bindings.len() % 2 != 0 {
+        return Err("let bindings must have an even number of elements".to_string());
+    }
+
+    // Create new environment
+    let mut local_env = Env::with_parent(env.clone());
+
+    // Process bindings sequentially (like Clojure let, not letrec)
+    let mut i = 0;
+    while i < bindings.len() {
+        if let Value::Symbol(name) = &bindings[i] {
+            let value = eval(&bindings[i + 1], &mut local_env)?;
+            local_env.set(name.clone(), value);
+        } else {
+            return Err("Binding names must be symbols".to_string());
+        }
+        i += 2;
+    }
+
+    // Evaluate body in local environment
+    eval(&list[2], &mut local_env)
+}
+
 fn eval_letrec(list: &[Value], env: &mut Env) -> Result<Value, String> {
     if list.len() != 3 {
         return Err("letrec requires exactly 2 arguments".to_string());
@@ -417,6 +451,19 @@ fn eval_call(list: &[Value], env: &mut Env) -> Result<Value, String> {
         evaluated.push(val);
     }
 
+    // Handle keywords as functions to access map values
+    if let Value::Keyword(key) = &evaluated[0] {
+        if evaluated.len() != 2 {
+            return Err("Keyword as function requires exactly 1 argument".to_string());
+        }
+        match &evaluated[1] {
+            Value::Map(map) => {
+                return Ok(map.get(key).cloned().unwrap_or(Value::Nil));
+            }
+            _ => return Err("Keyword as function requires a map argument".to_string()),
+        }
+    }
+    
     if let Value::Function(func) = &evaluated[0] {
         match func {
             Function::Native(f) => f(&evaluated[1..]),
@@ -870,29 +917,85 @@ pub fn create_default_env() -> Env {
         })),
     );
 
-    // String operations
+    // Time functions
     env.set(
-        "str".to_string(),
+        "now".to_string(),
         Value::Function(Function::Native(|args| {
-            let mut result = String::new();
-            for arg in args {
-                match arg {
-                    Value::Str(s) => result.push_str(s),
-                    Value::Number(n) => {
-                        if n.fract() == 0.0 && n.abs() < 1e15 {
-                            result.push_str(&format!("{:.0}", n));
-                        } else {
-                            result.push_str(&format!("{}", n));
-                        }
-                    }
-                    Value::Bool(b) => result.push_str(&format!("{}", b)),
-                    Value::Nil => result.push_str("nil"),
-                    _ => result.push_str(&arg.to_string()),
-                }
+            if !args.is_empty() {
+                return Err("now takes no arguments".to_string());
             }
-            Ok(Value::Str(result))
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let duration = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|_| "Time error".to_string())?;
+            Ok(Value::Number(duration.as_millis() as f64))
         })),
     );
+
+    // Map operations
+    env.set(
+        "get".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 2 {
+                return Err("get requires exactly 2 arguments".to_string());
+            }
+            match (&args[0], &args[1]) {
+                (Value::Map(map), Value::Keyword(key)) => {
+                    Ok(map.get(key).cloned().unwrap_or(Value::Nil))
+                }
+                (Value::Map(map), Value::Str(key)) => {
+                    Ok(map.get(key).cloned().unwrap_or(Value::Nil))
+                }
+                _ => Err("get requires a map and a key".to_string())
+            }
+        })),
+    );
+
+    env.set(
+        "assoc".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 3 {
+                return Err("assoc requires exactly 3 arguments".to_string());
+            }
+            match &args[0] {
+                Value::Map(map) => {
+                    let mut new_map = map.clone();
+                    let key = match &args[1] {
+                        Value::Keyword(k) => k.clone(),
+                        Value::Str(s) => s.clone(),
+                        _ => return Err("assoc key must be a keyword or string".to_string()),
+                    };
+                    new_map.insert(key, args[2].clone());
+                    Ok(Value::Map(new_map))
+                }
+                _ => Err("assoc requires a map as first argument".to_string())
+            }
+        })),
+    );
+
+    // Collection operations
+    env.set(
+        "contains?".to_string(),
+        Value::Function(Function::Native(|args| {
+            if args.len() != 2 {
+                return Err("contains? requires exactly 2 arguments".to_string());
+            }
+            match (&args[0], &args[1]) {
+                (Value::List(list), value) => {
+                    Ok(Value::Bool(list.contains(value)))
+                }
+                (Value::Map(map), Value::Keyword(key)) => {
+                    Ok(Value::Bool(map.contains_key(key)))
+                }
+                (Value::Map(map), Value::Str(key)) => {
+                    Ok(Value::Bool(map.contains_key(key)))
+                }
+                _ => Err("contains? requires a list/map and a value".to_string())
+            }
+        })),
+    );
+
+    // String operations
 
     env.set(
         "str-length".to_string(),
@@ -927,8 +1030,16 @@ pub fn create_default_env() -> Env {
                         Function::Macro { .. } => result.push_str("#<macro>"),
                         _ => result.push_str("#<function>"),
                     },
-                    Value::Vector(_) => result.push_str("#<vector>"),
-                    Value::Map(_) => result.push_str("#<map>"),
+                    Value::Vector(v) => {
+                        let items: Vec<String> = v.iter().map(|val| val.to_string()).collect();
+                        result.push_str(&format!("[{}]", items.join(" ")));
+                    }
+                    Value::Map(m) => {
+                        let pairs: Vec<String> = m.iter()
+                            .map(|(k, v)| format!("{} {}", k, v))
+                            .collect();
+                        result.push_str(&format!("{{{}}}", pairs.join(" ")));
+                    }
                     Value::IOResource(resource) => match resource {
                         IOResource::Reader(_) => result.push_str("#<reader>"),
                         IOResource::Writer(_) => result.push_str("#<writer>"),
@@ -2145,7 +2256,7 @@ fn load_namespace(ns_name: &str, env: &mut Env) -> Result<Value, String> {
     };
 
     // Save current namespace
-    let current_ns = env.get_namespace().to_string();
+    let _current_ns = env.get_namespace().to_string();
 
     // Load the file WITHOUT setting namespace (avoid expensive operations)
     let result = load_namespace_file(&file_path, env);

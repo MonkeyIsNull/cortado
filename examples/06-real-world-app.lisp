@@ -8,10 +8,10 @@
 (print)
 
 ;; Load required modules
-(require [core.seq :as s])
-(require [core.functional :as fn])
-(require [core.threading :as t])
-(require [core.control :as ctrl])
+(require 'core.seq)
+(require 'core.functional)
+(require 'core.threading)
+(require 'core.control)
 
 ;; === APPLICATION CONFIGURATION ===
 (ns app.config)
@@ -21,8 +21,8 @@
   :version "1.0.0"
   :max-tasks 100
   :default-priority :medium
-  :valid-statuses #{:todo :in-progress :done :cancelled}
-  :valid-priorities #{:low :medium :high :urgent}
+  :valid-statuses '(:todo :in-progress :done :cancelled)
+  :valid-priorities '(:low :medium :high :urgent)
 })
 
 (print "Application:" (:app-name config) "v" (:version config))
@@ -77,7 +77,7 @@
   (and (not (nil? (:id user)))
        (not (nil? (:name user)))
        (not (nil? (:email user)))
-       (contains? #{:admin :manager :developer :tester} (:role user))))
+       (contains? '(:admin :manager :developer :tester) (:role user))))
 
 (defn valid-priority? [priority]
   (contains? (:valid-priorities config) priority))
@@ -94,7 +94,7 @@
 ;; Task operations
 (defn add-task [task-list task]
   (if (valid-task? task)
-    (if (< (s/length task-list) (:max-tasks config))
+    (if (< (length task-list) (:max-tasks config))
       (cons task task-list)
       (do
         (print "ERROR: Maximum tasks limit reached")
@@ -125,16 +125,16 @@
 
 ;; Search and filter operations
 (defn find-task-by-id [task-list id]
-  (s/filter-list (fn [task] (= (:id task) id)) task-list))
+  (filter-list (fn [task] (= (:id task) id)) task-list))
 
 (defn find-tasks-by-status [task-list status]
-  (s/filter-list (fn [task] (= (:status task) status)) task-list))
+  (filter-list (fn [task] (= (:status task) status)) task-list))
 
 (defn find-tasks-by-priority [task-list priority]
-  (s/filter-list (fn [task] (= (:priority task) priority)) task-list))
+  (filter-list (fn [task] (= (:priority task) priority)) task-list))
 
 (defn find-tasks-by-assignee [task-list user-id]
-  (s/filter-list (fn [task] (= (:assignee task) user-id)) task-list))
+  (filter-list (fn [task] (= (:assignee task) user-id)) task-list))
 
 (print "Core business logic defined")
 (print)
@@ -173,8 +173,8 @@
                         (first (rest (rest (rest (rest tasks)))))))
 
 (print "Sample data created:")
-(print "  Users:" (s/length users))
-(print "  Tasks:" (s/length current-tasks))
+(print "  Users:" (length users))
+(print "  Tasks:" (length current-tasks))
 (print)
 
 ;; === REPORTING AND ANALYTICS ===
@@ -182,10 +182,10 @@
 
 (defn generate-status-report [task-list]
   (print "=== TASK STATUS REPORT ===")
-  (let [todo-count (s/length (find-tasks-by-status task-list :todo))
-        in-progress-count (s/length (find-tasks-by-status task-list :in-progress))
-        done-count (s/length (find-tasks-by-status task-list :done))
-        total-count (s/length task-list)]
+  (let [todo-count (length (find-tasks-by-status task-list :todo))
+        in-progress-count (length (find-tasks-by-status task-list :in-progress))
+        done-count (length (find-tasks-by-status task-list :done))
+        total-count (length task-list)]
     (print "TODO:" todo-count)
     (print "IN PROGRESS:" in-progress-count)
     (print "DONE:" done-count)
@@ -196,10 +196,10 @@
 
 (defn generate-priority-report [task-list]
   (print "=== PRIORITY REPORT ===")
-  (let [urgent-count (s/length (find-tasks-by-priority task-list :urgent))
-        high-count (s/length (find-tasks-by-priority task-list :high))
-        medium-count (s/length (find-tasks-by-priority task-list :medium))
-        low-count (s/length (find-tasks-by-priority task-list :low))]
+  (let [urgent-count (length (find-tasks-by-priority task-list :urgent))
+        high-count (length (find-tasks-by-priority task-list :high))
+        medium-count (length (find-tasks-by-priority task-list :medium))
+        low-count (length (find-tasks-by-priority task-list :low))]
     (print "URGENT:" urgent-count)
     (print "HIGH:" high-count)
     (print "MEDIUM:" medium-count)
@@ -207,14 +207,14 @@
 
 (defn generate-assignment-report [task-list user-list]
   (print "=== ASSIGNMENT REPORT ===")
-  (s/map-list (fn [user]
+  (map-list (fn [user]
                 (let [user-tasks (find-tasks-by-assignee task-list (:id user))
-                      task-count (s/length user-tasks)]
+                      task-count (length user-tasks)]
                   (print (:name user) ":" task-count "tasks")))
               user-list)
   
-  (let [unassigned-tasks (s/filter-list (fn [task] (nil? (:assignee task))) task-list)]
-    (print "UNASSIGNED:" (s/length unassigned-tasks) "tasks")))
+  (let [unassigned-tasks (filter-list (fn [task] (nil? (:assignee task))) task-list)]
+    (print "UNASSIGNED:" (length unassigned-tasks) "tasks")))
 
 (print "Reporting functions defined")
 (print)
@@ -233,7 +233,7 @@
   (print "=== " title " ===")
   (if (empty? task-list)
     (print "  No tasks found")
-    (s/map-list display-task task-list)))
+    (map-list display-task task-list)))
 
 (defn display-user [user]
   (print "  " (:name user) "(" (:email user) ") -" (:role user)))
@@ -241,7 +241,7 @@
 (defn display-user-list [user-list]
   (print)
   (print "=== USERS ===")
-  (s/map-list display-user user-list))
+  (map-list display-user user-list))
 
 (print "UI functions defined")
 (print)
@@ -279,7 +279,7 @@
   
   ;; Add it to the task list
   (def updated-tasks (add-task current-tasks new-task))
-  (print "Added to task list. Total tasks:" (s/length updated-tasks))
+  (print "Added to task list. Total tasks:" (length updated-tasks))
   
   ;; Update task status
   (def task-to-update (first updated-tasks))
@@ -305,7 +305,7 @@
 
 (defn get-overdue-tasks [task-list days]
   ;; Find tasks older than specified days
-  (s/filter-list (fn [task] 
+  (filter-list (fn [task] 
                    (> (calculate-task-age task) days)) 
                  task-list))
 
@@ -313,7 +313,7 @@
   ;; Simplified CSV export
   (print "CSV Export (simplified):")
   (print "ID,Title,Status,Priority,Assignee")
-  (s/map-list (fn [task]
+  (map-list (fn [task]
                 (print (:id task) "," (:title task) "," 
                        (:status task) "," (:priority task) ","
                        (if (:assignee task) (:assignee task) "None")))

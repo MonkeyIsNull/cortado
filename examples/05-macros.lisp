@@ -7,7 +7,7 @@
 (print)
 
 ;; Load control flow macros
-(require [core.control :as ctrl])
+(require 'core.control)
 
 ;; === WHAT ARE MACROS? ===
 (print "1. Understanding Macros")
@@ -70,18 +70,18 @@
 (print "5. Control Flow Macros")
 
 ;; when-not macro
-(ctrl/when-not false
+(when-not false
   (print "when-not: This prints when condition is false")
   42)
 
 ;; if-not macro  
 (print "if-not result:" 
-  (ctrl/if-not false "condition was false" "condition was true"))
+  (if-not false "condition was false" "condition was true"))
 
 ;; Multiple condition macro (cond)
 (def score 85)
 (def grade
-  (ctrl/cond
+  (cond
     (>= score 90) "A"
     (>= score 80) "B"
     (>= score 70) "C"
@@ -244,8 +244,8 @@
 (print "  Original: (my-unless false 42)")
 (print "  Expands to:" (macroexpand '(my-unless false 42)))
 
-(print "  Original: (ctrl/cond (> 5 3) 'big (< 5 3) 'small)")
-; (print "  Expands to:" (macroexpand '(ctrl/cond (> 5 3) "big" (< 5 3) "small")))
+(print "  Original: (cond (> 5 3) 'big (< 5 3) 'small)")
+; (print "  Expands to:" (macroexpand '(cond (> 5 3) "big" (< 5 3) "small")))
 
 (print)
 
